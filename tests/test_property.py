@@ -50,6 +50,35 @@ def test_random_playthrough_invariants(scenario_name: str, seed: int) -> None:
     assert r0 == -r1 or (r0, r1) == (0.0, 0.0)
 
 
+def test_exhaustive_action_id_sweep() -> None:
+    """Every one of the 495 ids either decodes+steps (masked) or raises
+    (unmasked or non-canonical), at several distinct game states."""
+    b = Battle.from_scenario(BUILTIN_SCENARIOS["archers_vs_cavalry"], 13)
+    rng = np.random.Generator(np.random.PCG64(2))
+    for _ in range(6):
+        mask = b.legal_action_mask()
+        for action_id in range(N_ACTIONS):
+            if mask[action_id]:
+                clone = b.clone()
+                clone.step(Action.from_id(action_id))
+            else:
+                with pytest.raises(ValueError):
+                    b.step(Action.from_id(action_id))
+        legal = b.legal_actions()
+        b.step(legal[int(rng.integers(len(legal)))])
+
+
+def test_run_pairs_parallel_matches_inline() -> None:
+    from tactica.eval.runner import derive_seed, run_pairs
+
+    tasks = [("heuristic", "random",
+              BUILTIN_SCENARIOS["open_field"].to_dict(),
+              derive_seed(0, "open_field", i)) for i in range(3)]
+    inline = list(run_pairs(tasks, workers=1))
+    parallel = list(run_pairs(tasks, workers=2))
+    assert inline == parallel
+
+
 def test_illegal_actions_raise() -> None:
     b = Battle.from_scenario(BUILTIN_SCENARIOS["open_field"], 7)
     mask = b.legal_action_mask()

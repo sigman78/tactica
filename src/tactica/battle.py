@@ -503,8 +503,12 @@ class Battle:
             parts.append(f"{u}:{s.side}:{int(s.unit_type)}:{s.count}:{s.top_hp}:"
                          f"{s.cell}:{int(s.has_waited)}:{int(s.defending)}:"
                          f"{s.retaliations_left}")
-        rng_state = self.rng.bit_generator.state["state"]
-        parts.append(f"{rng_state['state']}:{rng_state['inc']}")
+        bg = self.rng.bit_generator.state
+        rng_state = bg["state"]
+        # has_uint32/uinteger: PCG64's buffered half-word also shapes future
+        # rolls, so it belongs in the hash.
+        parts.append(f"{rng_state['state']}:{rng_state['inc']}:"
+                     f"{bg['has_uint32']}:{bg['uinteger']}")
         return hashlib.sha256("|".join(parts).encode()).hexdigest()[:16]
 
     def render(self) -> str:

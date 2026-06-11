@@ -85,24 +85,42 @@ def cmd_tournament(args: argparse.Namespace) -> int:
 # noise-floor
 
 
+def _game_score0(game: dict) -> float:
+    winner = game["winner"]
+    return 0.5 if winner is None else (1.0 if winner == 0 else 0.0)
+
+
 def cmd_noise_floor(args: argparse.Namespace) -> int:
     scenarios = resolve_scenarios(args.scenarios)
     print(f"Noise floor: {args.agent} vs itself, {args.pairs} mirrored pairs "
           f"per scenario (CRN seeds, base={args.seed})\n")
-    overall: list[float] = []
+    all_pair: list[float] = []
+    all_game: list[float] = []
     for sc in scenarios:
         tasks = [(args.agent, args.agent, sc.to_dict(),
                   derive_seed(args.seed, sc.name, i)) for i in range(args.pairs)]
-        scores = [s for _, _, s in run_pairs(tasks, workers=args.workers)]
-        overall.extend(scores)
-        mean, ci = mean_ci95(scores)
-        print(f"  {sc.name:>20}: score={mean:.4f} ±{ci:.4f} (95% CI)  "
-              f"deviation from 0.5: {mean - 0.5:+.4f}")
-    mean, ci = mean_ci95(overall)
-    print(f"\n  {'OVERALL':>20}: score={mean:.4f} ±{ci:.4f} (95% CI)  "
-          f"deviation from 0.5: {mean - 0.5:+.4f}")
-    print("\nAny |deviation| within the CI is luck, not skill: treat this as "
-          "the resolution limit for agent comparisons on these scenarios.")
+        pair_scores: list[float] = []
+        game_scores: list[float] = []
+        for g1, g2, score in run_pairs(tasks, workers=args.workers):
+            pair_scores.append(score)
+            game_scores.extend((_game_score0(g1), _game_score0(g2)))
+        all_pair.extend(pair_scores)
+        all_game.extend(game_scores)
+        gm, gci = mean_ci95(game_scores)
+        pm, pci = mean_ci95(pair_scores)
+        print(f"  {sc.name:>20}: game-level side-0 score={gm:.4f} +/-{gci:.4f}"
+              f" (dev {gm - 0.5:+.4f})   pair-level={pm:.4f} +/-{pci:.4f}")
+    gm, gci = mean_ci95(all_game)
+    pm, pci = mean_ci95(all_pair)
+    print(f"\n  {'OVERALL':>20}: game-level side-0 score={gm:.4f} +/-{gci:.4f}"
+          f" (dev {gm - 0.5:+.4f})   pair-level={pm:.4f} +/-{pci:.4f}")
+    print(
+        "\nGame-level deviation from 0.5 is the luck floor for UNPAIRED"
+        "\ncomparisons (side advantage + sampling noise). Pair-level scores"
+        "\nshow what mirrored pairs + CRN buy you: for a deterministic agent"
+        "\nthe two games of a pair are exact mirrors and the noise is zero;"
+        "\nany apparent skill difference smaller than these bands is luck."
+    )
     return 0
 
 
@@ -126,7 +144,7 @@ def cmd_skill_curve(args: argparse.Namespace) -> int:
             scores.extend(s for _, _, s in run_pairs(tasks, workers=args.workers))
         mean, ci = mean_ci95(scores)
         rows.append((eps, mean, ci))
-        print(f"  eps={eps:<5g} score={mean:.4f} ±{ci:.4f}")
+        print(f"  eps={eps:<5g} score={mean:.4f} +/-{ci:.4f}")
 
     print("\n(0.5 = noise mistakes cost nothing; lower = decisions matter)")
     try:

@@ -81,6 +81,13 @@ def test_mcts_takes_a_winning_kill() -> None:
     assert action == Action(ActionType.MELEE_ATTACK, xy_cell(6, 4))
 
 
+def test_mcts_handles_fewer_sims_than_actions() -> None:
+    b = Battle.from_scenario(BUILTIN_SCENARIOS["open_field"], 6)
+    agent = MCTSAgent(simulations=3, seed=2)
+    action = agent.act(b)
+    assert b.legal_action_mask()[action.id]
+
+
 def test_weighted_rejects_unknown_feature(tmp_path) -> None:
     bad = tmp_path / "bad.json"
     bad.write_text('{"not_a_feature": 1.0}')

@@ -93,10 +93,13 @@ def play_game(
 
 
 def run_match(spec0: str, spec1: str, scenario: Scenario, seed: int,
-              on_step: Callable[[Battle, Action], None] | None = None) -> GameRecord:
-    """Play one game with freshly built, deterministically seeded agents."""
-    agents = (make_agent(spec0, seed=derive_seed(seed, 0, spec0)),
-              make_agent(spec1, seed=derive_seed(seed, 1, spec1)))
+              on_step: Callable[[Battle, Action], None] | None = None,
+              agent_salt: int = 0) -> GameRecord:
+    """Play one game with freshly built, deterministically seeded agents.
+    ``agent_salt`` decorrelates agent RNG streams between the two games of a
+    mirrored pair; without it, stochastic self-play pairs would be clones."""
+    agents = (make_agent(spec0, seed=derive_seed(seed, agent_salt, 0, spec0)),
+              make_agent(spec1, seed=derive_seed(seed, agent_salt, 1, spec1)))
     return play_game(scenario, seed, agents, (spec0, spec1), on_step)
 
 
@@ -104,8 +107,8 @@ def run_mirrored_pair(spec_a: str, spec_b: str, scenario: Scenario,
                       seed: int) -> tuple[GameRecord, GameRecord, float]:
     """Two games on the same scenario+seed with sides swapped.
     Returns (game_ab, game_ba, pair_score_for_a)."""
-    g1 = run_match(spec_a, spec_b, scenario, seed)
-    g2 = run_match(spec_b, spec_a, scenario, seed)
+    g1 = run_match(spec_a, spec_b, scenario, seed, agent_salt=0)
+    g2 = run_match(spec_b, spec_a, scenario, seed, agent_salt=1)
     score_a = (g1.score(0) + g2.score(1)) / 2.0
     return g1, g2, score_a
 

@@ -89,8 +89,8 @@ def openskill_ratings(result: TournamentResult) -> list[tuple[str, float, float,
 def format_matrix(result: TournamentResult) -> str:
     agents = result.agents
     matrix = result.matrix()
-    width = max(10, max(len(a) for a in agents) + 1)
-    lines = ["Pair-score matrix (row vs column, 0.5 = even):"]
+    width = max(14, max(len(a) for a in agents) + 2)
+    lines = ["Pair-score matrix (row vs column, 0.5 = even, +/- is 95% CI):"]
     header = " " * width + "".join(f"{a:>{width}}" for a in agents)
     lines.append(header)
     for a in agents:
@@ -100,7 +100,7 @@ def format_matrix(result: TournamentResult) -> str:
                 cells.append(f"{'-':>{width}}")
             else:
                 mean, ci, _ = matrix[(a, b)]
-                cells.append(f"{f'{mean:.3f}±{ci:.2f}':>{width}}")
+                cells.append(f"{f'{mean:.3f}+/-{ci:.2f}':>{width}}")
         lines.append(f"{a:>{width}}" + "".join(cells))
     return "\n".join(lines)
 
@@ -110,7 +110,7 @@ def format_scenario_breakdown(result: TournamentResult) -> str:
     grouped: dict[tuple[str, str], list[str]] = defaultdict(list)
     for (a, b, sc), vals in sorted(result.by_scenario.items()):
         mean, ci = mean_ci95(vals)
-        grouped[(a, b)].append(f"{sc}={mean:.3f}±{ci:.2f}")
+        grouped[(a, b)].append(f"{sc}={mean:.3f}+/-{ci:.2f}")
     for (a, b), cells in grouped.items():
         lines.append(f"  {a} vs {b}: " + "  ".join(cells))
     return "\n".join(lines)
