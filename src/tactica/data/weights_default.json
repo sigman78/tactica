@@ -1,0 +1,11 @@
+{
+  "damage_dealt": 6.0,
+  "kill": 3.0,
+  "damage_received": -4.0,
+  "target_value": 1.0,
+  "focus_fire": 1.0,
+  "dist_melee": -1.5,
+  "dist_ranged": 1.0,
+  "wait": -0.1,
+  "defend": 0.05
+}
