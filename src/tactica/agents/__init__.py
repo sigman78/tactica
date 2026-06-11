@@ -36,7 +36,8 @@ def make_agent(spec: str, seed: int = 0) -> Agent:
         parts = [p for p in rest.split(":") if p]
         sims = int(parts[0]) if parts else 32
         c_uct = float(parts[1]) if len(parts) > 1 else 1.4
-        return MCTSAgent(simulations=sims, c_uct=c_uct, seed=seed)
+        kwargs = {"rollout_cap": int(parts[2])} if len(parts) > 2 else {}
+        return MCTSAgent(simulations=sims, c_uct=c_uct, seed=seed, **kwargs)
     if head == "epsilon":
         eps_str, _, inner = rest.partition(":")
         if not inner:

@@ -35,10 +35,13 @@ FEATURES = (
     "defend",           # 1 for DEFEND
 )
 
+# Mirrors data/weights_default.json (the aggressive profile: SPRT-validated
+# at ~+11.5 elo over the original heuristic-imitating weights, which live on
+# as weights/conservative.json).
 DEFAULT_WEIGHTS: dict[str, float] = {
-    "damage_dealt": 6.0,
-    "kill": 3.0,
-    "damage_received": -4.0,
+    "damage_dealt": 8.0,
+    "kill": 5.0,
+    "damage_received": -2.0,
     "target_value": 1.0,
     "focus_fire": 1.0,
     "dist_melee": -1.5,

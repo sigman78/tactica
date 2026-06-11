@@ -35,7 +35,7 @@ def material_eval(battle: Battle) -> tuple[float, float]:
 
 class MCTSAgent(Agent):
     def __init__(self, simulations: int = 32, c_uct: float = 1.4,
-                 seed: int = 0, rollout_cap: int = ROLLOUT_CAP) -> None:
+                 seed: int = 0, rollout_cap: int = 40) -> None:
         self.simulations = simulations
         self.c_uct = c_uct
         self.rollout_cap = rollout_cap
@@ -77,12 +77,16 @@ class MCTSAgent(Agent):
         if len(root_actions) == 1:
             return root_actions[0]
         player = battle.current_player()
-        n = np.zeros(len(root_actions))
-        w = np.zeros(len(root_actions))
+        n_arms = len(root_actions)
+        n = np.zeros(n_arms)
+        w = np.zeros(n_arms)
         sweep = self._sweep_order(root_actions)
-        # Common random numbers across arms: the k-th visit of every arm
-        # shares a rollout seed, so single-visit comparisons are paired and
-        # the root action's own effect dominates rollout noise.
+        # Common random numbers across arms: every visit in round r uses the
+        # same rollout seed for every arm, so seed luck is common-mode and
+        # cancels out of the cross-arm ranking. (Unpaired allocation -- e.g.
+        # plain UCB revisits -- lets the max over many one-sample means be
+        # won by a lucky outlier arm, which made *more* simulations play
+        # strictly worse.)
         visit_seeds: dict[int, int] = {}
 
         def seed_for(visit: int) -> int:
@@ -90,18 +94,33 @@ class MCTSAgent(Agent):
                 visit_seeds[visit] = int(self.rng.integers(2**63))
             return visit_seeds[visit]
 
-        for sim in range(self.simulations):
-            if sim < len(root_actions):
-                idx = sweep[sim]
-            else:
-                ucb = w / n + self.c_uct * np.sqrt(math.log(sim) / n)
-                idx = int(np.argmax(ucb))
+        def simulate(idx: int) -> None:
             b = battle.clone()
             b.reseed(seed_for(int(n[idx])))
             b.step(root_actions[idx])
-            value = self._rollout(b, player)
             n[idx] += 1
-            w[idx] += value
+            w[idx] += self._rollout(b, player)
+
+        # Progressive widening: a one-sample mean per arm is a coin flip, so
+        # ranking dozens of arms on single rollouts is a max-of-noise lottery
+        # (empirically, 8-sim agents beat 128-sim agents before this).
+        # Consider ~sqrt(2*sims) arms in sweep-priority order, so a bigger
+        # budget deepens estimates faster than it widens the candidate set.
+        considered = max(1, min(int(math.sqrt(2 * self.simulations)), n_arms))
+        arms = sweep[:considered]
+        rounds = self.simulations // considered
+        paired_budget = rounds * considered
+        for sim in range(paired_budget):
+            simulate(arms[sim % considered])
+        # Leftover budget goes to UCB1 over the paired means: it sharpens
+        # the leaders' estimates while the paired rounds carry the ranking.
+        for sim in range(paired_budget, self.simulations):
+            ucb = np.full(n_arms, -np.inf)
+            ucb[arms] = w[arms] / n[arms] + self.c_uct * np.sqrt(
+                math.log(sim) / n[arms])
+            simulate(int(np.argmax(ucb)))
 
         means = np.where(n > 0, w / np.maximum(n, 1), -np.inf)
-        return root_actions[int(np.argmax(means))]
+        best = max(range(n_arms),
+                   key=lambda i: (means[i], n[i], -root_actions[i].id))
+        return root_actions[best]

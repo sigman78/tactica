@@ -28,8 +28,9 @@ pip users: `pip install -e .[eval]`.
 ## CLI
 
 One entry point, six subcommands. Agent specs used everywhere:
-`random`, `heuristic`, `weighted[:weights.json]`, `mcts[:SIMS[:C_UCT]]`,
-`epsilon:EPS:INNER` (e.g. `epsilon:0.1:heuristic`).
+`random`, `heuristic`, `weighted[:weights.json]`,
+`mcts[:SIMS[:C_UCT[:ROLLOUT_CAP]]]`, and `epsilon:EPS:INNER`
+(e.g. `epsilon:0.1:heuristic`).
 
 ### `tactica play` — run one battle
 
@@ -59,23 +60,23 @@ open_field seed=1: side 0 (heuristic) wins after 7 rounds, hash=6770ab9a165d29c1
 
 ```
 $ uv run tactica tournament --agents random,heuristic,mcts --scenarios all --pairs 20 --seed 1 --out results.jsonl
-720 games (360 mirrored pairs) in 103.5s
+720 games (360 mirrored pairs) in 48.7s
 
 Pair-score matrix (row vs column, 0.5 = even, +/- is 95% CI):
                       random     heuristic          mcts
-        random             -  0.037+/-0.02  0.113+/-0.03
-     heuristic  0.963+/-0.02             -  0.812+/-0.04
-          mcts  0.887+/-0.03  0.188+/-0.04             -
+        random             -  0.037+/-0.02  0.067+/-0.03
+     heuristic  0.963+/-0.02             -  0.588+/-0.05
+          mcts  0.933+/-0.03  0.412+/-0.05             -
 
 Per-scenario pair scores (matchup: scenario=score):
-  heuristic vs mcts: archers_vs_cavalry=0.500+/-0.00  chokepoint=0.975+/-0.05  ...
+  heuristic vs mcts: archers_vs_cavalry=0.500+/-0.00  chokepoint=0.525+/-0.13  ...
   random vs heuristic: archers_vs_cavalry=0.000+/-0.00  chokepoint=0.000+/-0.00  ...
-  random vs mcts: archers_vs_cavalry=0.325+/-0.06  chokepoint=0.013+/-0.02  ...
+  random vs mcts: archers_vs_cavalry=0.113+/-0.08  chokepoint=0.000+/-0.00  ...
 
 OpenSkill ratings (PlackettLuce; ordinal = mu - 3*sigma):
-                 heuristic  mu= 38.237  sigma= 1.899  ordinal= 32.541  95% mu-range=[34.52, 41.96]
-                      mcts  mu= 28.861  sigma= 1.799  ordinal= 23.465  95% mu-range=[25.34, 32.39]
-                    random  mu= 13.415  sigma= 2.227  ordinal=  6.735  95% mu-range=[9.05, 17.78]
+                 heuristic  mu= 34.109  sigma= 1.646  ordinal= 29.170  95% mu-range=[30.88, 37.34]
+                      mcts  mu= 33.963  sigma= 1.626  ordinal= 29.085  95% mu-range=[30.78, 37.15]
+                    random  mu= 12.701  sigma= 2.575  ordinal=  4.977  95% mu-range=[7.65, 17.75]
 
 game log written to results.jsonl
 ```
@@ -133,19 +134,22 @@ rewards skill; a flat one means outcomes are luck-dominated.
 ### `tactica sprt` — sequential testing for weight changes
 
 ```
-$ uv run tactica sprt --candidate weights/aggressive.json --baseline weights/default.json --elo0 0 --elo1 10 --alpha 0.05 --beta 0.05
+$ uv run tactica sprt --candidate weights/conservative.json --baseline weights/default.json --elo0 0 --elo1 10 --alpha 0.05 --beta 0.05
 SPRT: H1 elo>=10.0 vs H0 elo<=0.0, alpha=0.05 beta=0.05
 LLR bounds: accept H0 at -2.944, accept H1 at 2.944
 
-  n=   50  WDL=26/0/24  LLR=+0.037
-  n=  100  WDL=51/0/49  LLR=+0.016
+  n=   50  WDL=23/0/27  LLR=-0.155
   [... streams mirrored pairs until a bound is crossed or --max-pairs ...]
-  n= 5450  WDL=2813/0/2637  LLR=+2.811
+  n= 1950  WDL=938/0/1012  LLR=-2.941
 
-Verdict: accept H1 (candidate is stronger)
-Games: 5498 (2749 mirrored pairs)  WDL=2840/0/2658  score=0.5166 (~+11.5 elo)
-Final LLR: +2.964  (bounds [-2.944, 2.944])
-LLR trajectory (last 12 of 2749 pairs): +2.80, +2.80, ..., +2.91, +2.96
+Verdict: accept H0 (no improvement)
+Games: 1960 (980 mirrored pairs)  WDL=943/0/1017  score=0.4811 (~-13.1 elo)
+Final LLR: -2.945  (bounds [-2.944, 2.944])
+LLR trajectory (last 12 of 980 pairs): -2.94, -2.94, ..., -2.94, -2.94
+
+(That run is how the shipped default weights earned their place: the
+aggressive profile was SPRT-accepted at ~+11.5 elo over the original
+heuristic-imitating weights, which live on as weights/conservative.json.)
 ```
 
 Streams mirrored pairs of `WeightedAgent(candidate)` vs
@@ -164,6 +168,48 @@ Re-simulates a logged game from (scenario, seed, action list) and asserts
 the final state hash matches the log. `--render` replays the ASCII board
 turn by turn; `--index N` picks a row from a multi-game log such as
 `results.jsonl`.
+
+## Agent ladder
+
+- **random** — uniform over legal actions; the floor every agent must beat.
+- **heuristic** — scripted: archers focus the lowest-HP target and kite when
+  cornered; melee attacks the highest-value reachable target or advances on
+  it; defends when nothing is useful. The strongest shipped agent.
+- **weighted** — scores every legal action with a linear feature vector
+  (expected damage dealt/received, kill bonus, target value, focus fire,
+  distance terms, wait/defend flags) and plays the argmax. The shipped
+  default weights are an aggressive profile that was SPRT-accepted at
+  ~+11.5 elo over the original heuristic-imitating weights
+  (`weights/conservative.json`).
+- **epsilon:EPS:INNER** — plays a uniform random legal action with
+  probability EPS, otherwise defers to INNER. The measurement probe behind
+  `skill-curve`.
+- **mcts** — flat UCT with several documented twists that earned their place
+  through measurements you can rerun:
+  - *CRN-paired rounds*: simulations are allocated in full rounds where
+    every arm shares the round's rollout seed, so seed luck is common-mode
+    and cancels from the ranking. (Unpaired UCB revisits let the max over
+    ~50 one-sample means be won by lucky outlier arms — measurably, 8-sim
+    agents beat 128-sim agents until this change.)
+  - *Progressive widening*: only ~sqrt(2·sims) arms are considered, attack
+    arms first — rollout evaluations rank attacks usefully but are noisy
+    and systematically retreat-happy on movement arms.
+  - *Rollout-length discount*: values decay ~30% over the rollout cap, so a
+    kill now beats the same win 100 plies later. Without it the agent rolls
+    out a won position from every arm, ties at +1.0, and dawdles forever.
+  - *Short biased rollouts*: `Battle.playout` (attack- and chase-biased
+    random policy) capped at 40 steps by default, then the material-balance
+    eval. The spec's literal 200-step cap is available as `mcts:S:C:200`,
+    but it measures weaker (0.42 +/- 0.12 head-to-head vs the 40-step
+    default, and 0.22 vs heuristic instead of 0.35) and runs ~5x slower:
+    long random rollouts drown the root action's effect in outcome noise.
+  - A known, measured limitation: strength does **not** scale cleanly with
+    simulations (128 sims ~ 0.25 vs 8 sims on open_field). Uninformed
+    rollouts undervalue initiating melee trades (the attacker always eats
+    retaliation; the tempo payoff is beyond the evaluation horizon), so
+    extra search converges on that bias instead of fixing it. Better
+    rollout policies or tree search are the obvious next experiments —
+    this sandbox exists to make those measurable.
 
 ## Simulator API contract
 

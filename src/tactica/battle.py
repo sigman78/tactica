@@ -373,8 +373,8 @@ class Battle:
             self.queue.pop(0)
         self._refill_queue()
 
-    def playout(self, max_steps: int = 200, attack_bias: float = 0.6,
-                chase_bias: float = 0.6) -> int:
+    def playout(self, max_steps: int = 200, attack_bias: float = 0.95,
+                chase_bias: float = 0.9) -> int:
         """Play a fast, biased-random rollout in place; returns steps taken.
 
         The rollout policy samples legal actions cheaply: single-cell moves,
