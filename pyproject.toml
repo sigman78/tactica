@@ -3,6 +3,8 @@ name = "tactica"
 version = "0.1.0"
 description = "HoMM-style turn-based tactics AI sandbox: headless simulator, agent ladder, evaluation tooling"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.11"
 dependencies = [
     "numpy>=1.26",
