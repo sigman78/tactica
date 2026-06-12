@@ -1,4 +1,4 @@
-"""``tactica`` CLI: play, tournament, noise-floor, skill-curve, sprt, replay."""
+"""``tactica`` CLI: play, tournament, noise-floor, skill-curve, sprt, replay, web."""
 from __future__ import annotations
 
 import argparse
@@ -251,6 +251,24 @@ def cmd_replay(args: argparse.Namespace) -> int:
 
 
 # ----------------------------------------------------------------------- #
+# web
+
+
+def cmd_web(args: argparse.Namespace) -> int:
+    try:
+        import uvicorn
+        from tactica.web.server import create_app
+    except ImportError:
+        print("the dashboard needs the web extra: uv sync, or "
+              "pip install tactica[web]", file=sys.stderr)
+        return 2
+    app = create_app(presets_dir=args.presets_dir, root_dir=".")
+    print(f"tactica dashboard on http://{args.host}:{args.port}")
+    uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
+    return 0
+
+
+# ----------------------------------------------------------------------- #
 # parser
 
 
@@ -316,6 +334,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--index", type=int, default=0, help="game row to replay")
     p.add_argument("--render", action="store_true")
     p.set_defaults(func=cmd_replay)
+
+    p = sub.add_parser("web", help="serve the interactive dashboard")
+    p.add_argument("--host", default="127.0.0.1")
+    p.add_argument("--port", type=int, default=8321)
+    p.add_argument("--presets-dir", default="experiments",
+                   help="directory of experiment preset JSON files")
+    p.set_defaults(func=cmd_web)
     return parser
 
 

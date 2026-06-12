@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tactica — war room</title>
+<link rel="stylesheet" href="/static/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%2311131a'/><rect x='2' y='2' width='5' height='5' fill='%23d4a843'/><rect x='9' y='9' width='5' height='5' fill='%235fa8d3'/></svg>">
+</head>
+<body>
+
+<aside id="sidebar">
+  <header id="brand">
+    <div class="sigil" aria-hidden="true"></div>
+    <div>
+      <h1>tactica</h1>
+      <p class="sub">war room &middot; <span id="brand-status">connecting&hellip;</span></p>
+    </div>
+  </header>
+
+  <section class="side-block" id="presets-block">
+    <h2>Experiments <span class="hint">presets</span></h2>
+    <ul id="preset-list" class="side-list"></ul>
+  </section>
+
+  <section class="side-block" id="jobs-block">
+    <h2>Campaign log <span class="hint">jobs</span></h2>
+    <ul id="job-list" class="side-list"></ul>
+  </section>
+
+  <footer id="side-foot">
+    <div id="unit-legend"></div>
+  </footer>
+</aside>
+
+<main id="main">
+  <nav id="tabs">
+    <button class="tab active" data-tab="run">Run</button>
+    <button class="tab" data-tab="play">Play</button>
+    <button class="tab" data-tab="replays">Replay viewer</button>
+  </nav>
+
+  <!-- ============== RUN TAB ============== -->
+  <section id="tab-run" class="tab-pane active">
+
+    <section class="panel" id="config-panel">
+      <header class="panel-head">
+        <h2 id="config-title">New experiment</h2>
+        <div class="panel-actions">
+          <button id="btn-json-toggle" class="ghost" type="button">raw json</button>
+          <button id="btn-save-preset" class="ghost" type="button">save preset</button>
+          <button id="btn-run" class="primary" type="button">&#9654; Run</button>
+        </div>
+      </header>
+      <div class="config-body">
+        <div class="field kind-field">
+          <label for="kind-select">kind</label>
+          <select id="kind-select"></select>
+        </div>
+        <form id="config-form" autocomplete="off"></form>
+        <textarea id="config-json" class="hidden" spellcheck="false" rows="10"></textarea>
+        <p id="config-desc" class="desc"></p>
+        <details id="kind-info">
+          <summary><span id="kind-info-title"></span> <span class="hint">what &amp; why</span></summary>
+          <p id="kind-info-what"></p>
+          <p id="kind-info-why"></p>
+        </details>
+      </div>
+    </section>
+
+    <section class="panel hidden" id="job-panel">
+      <header class="panel-head">
+        <h2 id="job-title">&mdash;</h2>
+        <div class="panel-actions">
+          <span id="job-status" class="chip">&mdash;</span>
+          <button id="btn-cancel" class="ghost danger" type="button">cancel</button>
+        </div>
+      </header>
+      <div id="job-progress-row">
+        <div id="progress-track"><div id="progress-fill"></div></div>
+        <span id="progress-text" class="mono">&mdash;</span>
+      </div>
+      <div id="job-body">
+        <div id="job-charts"></div>
+        <div id="job-result"></div>
+      </div>
+      <details id="log-details" open>
+        <summary>Dispatches <span class="hint">log</span></summary>
+        <pre id="log-pane" class="mono"></pre>
+      </details>
+    </section>
+
+  </section>
+
+  <!-- ============== PLAY TAB ============== -->
+  <section id="tab-play" class="tab-pane">
+
+    <section class="panel" id="play-setup">
+      <header class="panel-head">
+        <h2>Challenge an agent</h2>
+        <div class="panel-actions">
+          <button id="btn-start-game" class="primary" type="button">&#9876; To battle</button>
+        </div>
+      </header>
+      <div id="play-setup-form">
+        <div class="field">
+          <label for="pg-agent">opponent agent</label>
+          <input type="text" id="pg-agent" value="heuristic" list="agent-specs">
+          <datalist id="agent-specs"></datalist>
+        </div>
+        <div class="field">
+          <label for="pg-scenario">scenario</label>
+          <select id="pg-scenario"></select>
+        </div>
+        <div class="field">
+          <label for="pg-side">your side</label>
+          <select id="pg-side">
+            <option value="0">gold (left)</option>
+            <option value="1">blue (right)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="pg-seed">seed</label>
+          <input type="number" id="pg-seed" value="1">
+        </div>
+        <div class="field check">
+          <input type="checkbox" id="pg-det">
+          <label for="pg-det">deterministic damage</label>
+        </div>
+      </div>
+      <p class="desc">Move: click a highlighted cell. Attack: click an enemy in reach
+        (shooters fire from range automatically). Hover an enemy for the damage forecast.</p>
+    </section>
+
+    <div id="play-layout" class="hidden">
+      <section class="panel" id="play-board-panel">
+        <header class="panel-head">
+          <h2 id="play-title">&mdash;</h2>
+          <span id="play-turn-banner" class="chip">&mdash;</span>
+        </header>
+        <div id="play-board-wrap">
+          <svg id="play-board" viewBox="0 0 594 486" preserveAspectRatio="xMidYMid meet"></svg>
+        </div>
+        <div id="play-actions">
+          <button id="pa-wait" class="ghost" type="button">&#8987; Wait</button>
+          <button id="pa-defend" class="ghost" type="button">&#128737; Defend</button>
+          <span id="play-hint" class="hint"></span>
+        </div>
+        <div id="play-over" class="hidden">
+          <div id="play-over-banner" class="verdict"></div>
+          <div class="panel-actions">
+            <button id="btn-save-game" class="ghost" type="button">save replay</button>
+            <button id="btn-new-game" class="primary" type="button">new battle</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" id="play-info-panel">
+        <h3 class="block-title" style="margin-top:0">Round <span id="play-round">&mdash;</span></h3>
+        <div class="block-title">Initiative queue</div>
+        <div id="play-queue"></div>
+        <div class="block-title">Battle log</div>
+        <pre id="play-log" class="mono"></pre>
+      </section>
+    </div>
+  </section>
+
+  <!-- ============== REPLAYS TAB ============== -->
+  <section id="tab-replays" class="tab-pane">
+    <div id="replay-layout">
+      <section class="panel" id="replay-sources">
+        <header class="panel-head"><h2>Game records</h2>
+          <div class="panel-actions">
+            <button id="btn-replays-refresh" class="ghost" type="button">refresh</button>
+          </div>
+        </header>
+        <div id="replay-source-list"></div>
+        <div id="replay-game-list"></div>
+      </section>
+
+      <section class="panel" id="viewer-panel">
+        <header class="panel-head">
+          <h2 id="viewer-title">Replay viewer</h2>
+          <span id="viewer-outcome" class="hint"></span>
+        </header>
+        <div id="board-wrap">
+          <svg id="board" viewBox="0 0 594 486" preserveAspectRatio="xMidYMid meet"></svg>
+        </div>
+        <div id="viewer-caption" class="mono">select a game record</div>
+        <div id="viewer-controls">
+          <button id="vc-first" class="ghost" type="button">&#9198;</button>
+          <button id="vc-prev" class="ghost" type="button">&#9664;</button>
+          <button id="vc-play" class="primary" type="button">&#9654;</button>
+          <button id="vc-next" class="ghost" type="button">&#9654;&#65038;</button>
+          <input id="vc-slider" type="range" min="0" max="0" value="0">
+          <select id="vc-speed">
+            <option value="600">slow</option>
+            <option value="250" selected>normal</option>
+            <option value="90">fast</option>
+          </select>
+        </div>
+      </section>
+    </div>
+  </section>
+</main>
+
+<div id="toast" class="hidden"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>

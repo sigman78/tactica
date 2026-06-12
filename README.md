@@ -27,7 +27,7 @@ pip users: `pip install -e .[eval]`.
 
 ## CLI
 
-One entry point, six subcommands. Agent specs used everywhere:
+One entry point, seven subcommands. Agent specs used everywhere:
 `random`, `heuristic`, `weighted[:weights.json]`,
 `mcts[:SIMS[:C_UCT[:ROLLOUT_CAP]]]`, and `epsilon:EPS:INNER`
 (e.g. `epsilon:0.1:heuristic`).
@@ -168,6 +168,50 @@ Re-simulates a logged game from (scenario, seed, action list) and asserts
 the final state hash matches the log. `--render` replays the ASCII board
 turn by turn; `--index N` picks a row from a multi-game log such as
 `results.jsonl`.
+
+### `tactica web` — interactive dashboard
+
+```
+$ uv run tactica web
+tactica dashboard on http://127.0.0.1:8321
+```
+
+A local single-page war room over the same evaluation tooling (needs the
+`web` extra, included in a plain `uv sync`):
+
+- **Experiments from presets** — editable JSON presets in `experiments/`
+  (a few ship with the repo: quick smoke, full ladder, the SPRT run that
+  promoted the default weights, ...). Tweak in a form or as raw JSON,
+  save back, run.
+- **Live runs over SSE** — tournament pair-score matrix fills in as a
+  heatmap while games stream back; SPRT draws its LLR trajectory against
+  the accept bounds in real time; skill-curve and noise-floor plot as
+  each point lands. Progress, throughput, streaming logs, cooperative
+  cancel. Charts are hand-rolled SVG; the page works fully offline.
+- **Final reports** — OpenSkill rating bars, per-scenario breakdowns,
+  verdict banners; tournaments can also write the usual JSONL game log.
+- **Replay viewer** — step/scrub/autoplay any logged game (from a
+  dashboard run or any `*.jsonl` on disk) on an SVG board with stack
+  counts, top-creature HP and the active stack highlighted. Every replay
+  is hash-verified against the log before it renders, same as
+  `tactica replay`.
+- **Play vs an agent** — playtest any agent spec yourself, turn by turn,
+  on the same board: click a highlighted cell to move, click an enemy in
+  reach to attack (hover for the average-damage forecast and retaliation
+  warning), Wait/Defend buttons, live initiative queue and a narrated
+  battle log with damage and kills. Finished battles save as
+  hash-verified replays (`replays/human-*.jsonl`) you can re-watch or
+  feed back through `tactica replay`.
+
+Units render as pixel-art portraits (`src/tactica/web/static/units/`),
+pre-generated with Gemini image generation via
+`scripts/gen_unit_icons.py` (needs `GEMINI_API_KEY`; the shipped icons
+are committed, so regeneration is only needed to restyle them).
+
+The dashboard is a thin layer: jobs reuse the exact CRN seed derivation,
+mirrored-pair runner and statistics as the CLI, so a result you see in the
+browser is byte-for-byte the result you would get from the equivalent
+command.
 
 ## Agent ladder
 

@@ -13,6 +13,10 @@ eval = [
     "openskill>=5.0",
     "matplotlib>=3.8",
 ]
+web = [
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+]
 
 [project.scripts]
 tactica = "tactica.cli:main"
@@ -20,6 +24,7 @@ tactica = "tactica.cli:main"
 [dependency-groups]
 dev = [
     "pytest>=8.0",
+    "httpx>=0.27",  # fastapi TestClient transport, used by tests/test_web.py
 ]
 # Mirrors the `eval` extra so a plain `uv sync` yields a fully working
 # sandbox (tournament ratings, plots). pip users install `tactica[eval]`.
@@ -27,9 +32,14 @@ eval = [
     "openskill>=5.0",
     "matplotlib>=3.8",
 ]
+# Mirrors the `web` extra: `tactica web` dashboard. pip users install tactica[web].
+web = [
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+]
 
 [tool.uv]
-default-groups = ["dev", "eval"]
+default-groups = ["dev", "eval", "web"]
 
 [build-system]
 requires = ["hatchling"]

@@ -1,0 +1,11 @@
+{
+  "kind": "tournament",
+  "description": "The whole agent ladder, all six scenarios, 20 pairs per cell. A few minutes with workers.",
+  "config": {
+    "agents": "random,heuristic,weighted,mcts:32",
+    "scenarios": "all",
+    "pairs": 20,
+    "seed": 1,
+    "workers": 0
+  }
+}

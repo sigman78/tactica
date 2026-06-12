@@ -1,0 +1,11 @@
+{
+  "kind": "tournament",
+  "description": "30-second sanity check: random vs heuristic on two scenarios.",
+  "config": {
+    "agents": "random,heuristic",
+    "scenarios": "open_field,skirmish",
+    "pairs": 10,
+    "seed": 1,
+    "workers": 0
+  }
+}

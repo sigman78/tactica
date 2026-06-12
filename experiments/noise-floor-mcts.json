@@ -1,0 +1,11 @@
+{
+  "kind": "noise-floor",
+  "description": "Resolution limit for a stochastic agent: mcts:8 vs itself on mirrored CRN pairs.",
+  "config": {
+    "agent": "mcts:8",
+    "pairs": 30,
+    "scenarios": "all",
+    "seed": 1,
+    "workers": 0
+  }
+}

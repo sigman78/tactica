@@ -1,0 +1,15 @@
+{
+  "kind": "sprt",
+  "description": "Re-run the validation that promoted the aggressive default weights (+~11.5 elo over conservative).",
+  "config": {
+    "candidate": "weighted:weights/default.json",
+    "baseline": "weighted:weights/conservative.json",
+    "elo0": 0,
+    "elo1": 10,
+    "alpha": 0.05,
+    "beta": 0.05,
+    "max_pairs": 2000,
+    "scenarios": "all",
+    "seed": 1
+  }
+}

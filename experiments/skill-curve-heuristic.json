@@ -1,0 +1,12 @@
+{
+  "kind": "skill-curve",
+  "description": "How much do decisions matter? Blunder-rate degradation of the heuristic agent.",
+  "config": {
+    "agent": "heuristic",
+    "epsilons": [0, 0.05, 0.1, 0.2, 0.5],
+    "pairs": 100,
+    "scenarios": "all",
+    "seed": 1,
+    "workers": 0
+  }
+}

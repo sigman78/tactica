@@ -1,0 +1,10 @@
+{
+  "kind": "play",
+  "description": "Single watchable game: mcts:64 vs heuristic on griffin_raid. Open it in the replay viewer.",
+  "config": {
+    "p0": "mcts:64",
+    "p1": "heuristic",
+    "scenario": "griffin_raid",
+    "seed": 7
+  }
+}
