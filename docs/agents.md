@@ -1,7 +1,7 @@
 # Agent ladder
 
 Agent specs accepted by every CLI command and the dashboard: `random`,
-`heuristic`, `weighted[:weights.json]`, `mcts[:SIMS[:C_UCT[:ROLLOUT_CAP]]]`,
+`heuristic`, `weighted[:weights.json]`, `mcts[:SIMS[:C_UCT[:ROLLOUT_CAP]]][:heuristic]`,
 `epsilon:EPS:INNER`.
 
 - **random** — uniform over legal actions; the floor every agent must beat.
@@ -52,9 +52,11 @@ Agent specs accepted by every CLI command and the dashboard: `random`,
     not more sims: at just **64 sims it beats the heuristic 0.71** on the same
     open_field+skirmish config where random-rollout `mcts:512` managed 0.42.
     Cost is ~10s/game (the heuristic runs every rollout step), so it is a
-    strength experiment, not the default, and is currently constructor-only
-    (not in the `mcts:...` spec). Next: tune epsilon/sims, SPRT it, and try a
-    positional leaf eval. This sandbox exists to make those measurable.
+    strength experiment, not the default. Spec it with the `heuristic` token
+    (`mcts:64:heuristic`) to pit it via `tournament`/`sprt`, e.g.
+    `tactica sprt --candidate mcts:64:heuristic --baseline heuristic`. Next:
+    tune epsilon/sims and SPRT it, and try a positional leaf eval. This
+    sandbox exists to make those measurable.
 
 See [extending.md](extending.md) for adding your own agent, and
 [evaluation.md](evaluation.md) for how to measure it honestly.

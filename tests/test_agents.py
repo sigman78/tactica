@@ -89,6 +89,26 @@ def test_mcts_handles_fewer_sims_than_actions() -> None:
     assert b.legal_action_mask()[action.id]
 
 
+def test_factory_mcts_rollout_policy() -> None:
+    assert make_agent("mcts:64").rollout_policy == "random"
+    a = make_agent("mcts:64:heuristic")
+    assert isinstance(a, MCTSAgent)
+    assert (a.simulations, a.rollout_policy) == (64, "heuristic")
+    full = make_agent("mcts:128:1.4:40:heuristic")
+    assert (full.simulations, full.c_uct, full.rollout_cap,
+            full.rollout_policy) == (128, 1.4, 40, "heuristic")
+
+
+def test_sprt_spec_normalization() -> None:
+    from tactica.cli import _as_spec
+    # a bare weights path keeps the legacy weighted: shorthand
+    assert _as_spec("weights/default.json") == "weighted:weights/default.json"
+    # full agent specs pass through, so sprt can pit any agents
+    assert _as_spec("mcts:64:heuristic") == "mcts:64:heuristic"
+    assert _as_spec("heuristic") == "heuristic"
+    assert _as_spec("weighted:weights/x.json") == "weighted:weights/x.json"
+
+
 def test_mcts_heuristic_rollout_picks_legal_actions() -> None:
     # The heuristic-guided rollout policy must still produce legal moves and
     # advance the game without error.

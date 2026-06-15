@@ -80,8 +80,8 @@ Remaining work:
 
 - It is ~10s/game (the heuristic runs every rollout step) -- a strength
   experiment, not a default. Profile / cap rollout length, or memoize.
-- Tune `rollout_epsilon` and sims; SPRT it. Currently only constructible
-  programmatically -- wire a spec form into `make_agent` to use it from the
-  tournament/SPRT CLI.
+- Tune `rollout_epsilon` and sims; SPRT it. Now spec'd as `mcts:SIMS:heuristic`
+  and `tactica sprt` accepts agent specs, so `tactica sprt --candidate
+  mcts:64:heuristic --baseline heuristic` runs it directly (slow: ~10s/game).
 - A positional leaf eval (beyond material) is the complementary lever; pairs
   with the "MCTS doesn't search approach sides" item above.

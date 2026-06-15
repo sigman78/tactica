@@ -175,9 +175,23 @@ def cmd_skill_curve(args: argparse.Namespace) -> int:
 # sprt
 
 
+_AGENT_HEADS = ("random", "heuristic", "weighted", "mcts", "epsilon")
+
+
+def _as_spec(value: str) -> str:
+    """Resolve an sprt --candidate/--baseline value to an agent spec. A bare
+    weights path (the legacy form) becomes ``weighted:PATH``; a full agent spec
+    passes through, so sprt can pit any two agents (e.g. ``mcts:64:heuristic``
+    vs ``heuristic``)."""
+    v = value.strip()
+    if v in _AGENT_HEADS or any(v.startswith(h + ":") for h in _AGENT_HEADS):
+        return v
+    return f"weighted:{v}"
+
+
 def cmd_sprt(args: argparse.Namespace) -> int:
-    candidate = f"weighted:{args.candidate}"
-    baseline = f"weighted:{args.baseline}"
+    candidate = _as_spec(args.candidate)
+    baseline = _as_spec(args.baseline)
     scenarios = resolve_scenarios(args.scenarios)
     lower, upper = sprt_bounds(args.alpha, args.beta)
     print(f"SPRT: H1 elo>={args.elo1} vs H0 elo<={args.elo0}, "
@@ -318,9 +332,11 @@ def build_parser() -> argparse.ArgumentParser:
     common(p)
     p.set_defaults(func=cmd_skill_curve)
 
-    p = sub.add_parser("sprt", help="sequential test: candidate vs baseline weights")
-    p.add_argument("--candidate", required=True, help="candidate weights JSON")
-    p.add_argument("--baseline", required=True, help="baseline weights JSON")
+    p = sub.add_parser("sprt", help="sequential test: candidate vs baseline agent")
+    p.add_argument("--candidate", required=True,
+                   help="candidate agent spec, or a weights JSON (-> weighted:PATH)")
+    p.add_argument("--baseline", required=True,
+                   help="baseline agent spec, or a weights JSON (-> weighted:PATH)")
     p.add_argument("--elo0", type=float, default=0.0)
     p.add_argument("--elo1", type=float, default=10.0)
     p.add_argument("--alpha", type=float, default=0.05)

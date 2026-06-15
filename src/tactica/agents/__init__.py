@@ -5,7 +5,8 @@ Agent spec grammar (used in ``--p0/--p1/--agents``):
 - ``random``
 - ``heuristic``
 - ``weighted`` or ``weighted:path/to/weights.json``
-- ``mcts`` or ``mcts:SIMS`` or ``mcts:SIMS:C_UCT``
+- ``mcts`` or ``mcts:SIMS[:C_UCT[:ROLLOUT_CAP]]``; append ``heuristic`` for a
+  HeuristicAgent-guided rollout (default ``random``), e.g. ``mcts:64:heuristic``
 - ``epsilon:EPS:INNER_SPEC`` e.g. ``epsilon:0.1:heuristic``
 """
 from __future__ import annotations
@@ -33,11 +34,22 @@ def make_agent(spec: str, seed: int = 0) -> Agent:
     if head == "weighted":
         return WeightedAgent(rest or None)
     if head == "mcts":
-        parts = [p for p in rest.split(":") if p]
-        sims = int(parts[0]) if parts else 32
-        c_uct = float(parts[1]) if len(parts) > 1 else 1.4
-        kwargs = {"rollout_cap": int(parts[2])} if len(parts) > 2 else {}
-        return MCTSAgent(simulations=sims, c_uct=c_uct, seed=seed, **kwargs)
+        # A "heuristic"/"random" token sets the rollout policy from any
+        # position; the rest are positional SIMS[:C_UCT[:ROLLOUT_CAP]].
+        policy = "random"
+        nums = []
+        for p in rest.split(":"):
+            if not p:
+                continue
+            if p in ("heuristic", "random"):
+                policy = p
+            else:
+                nums.append(p)
+        sims = int(nums[0]) if nums else 32
+        c_uct = float(nums[1]) if len(nums) > 1 else 1.4
+        kwargs = {"rollout_cap": int(nums[2])} if len(nums) > 2 else {}
+        return MCTSAgent(simulations=sims, c_uct=c_uct, seed=seed,
+                         rollout_policy=policy, **kwargs)
     if head == "epsilon":
         eps_str, _, inner = rest.partition(":")
         if not inner:

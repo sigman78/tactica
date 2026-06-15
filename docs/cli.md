@@ -105,7 +105,7 @@ Plays `EpsilonAgent(agent, eps)` against the clean agent and plots the score
 as a function of the blunder rate. A steep curve means the environment
 rewards skill; a flat one means outcomes are luck-dominated.
 
-## `tactica sprt` — sequential testing for weight changes
+## `tactica sprt` — sequential testing for agent changes
 
 ```
 $ uv run tactica sprt --candidate weights/conservative.json --baseline weights/default.json --elo0 0 --elo1 10 --alpha 0.05 --beta 0.05
@@ -126,9 +126,12 @@ aggressive profile was SPRT-accepted at ~+11.5 elo over the original
 heuristic-imitating weights, which live on as weights/conservative.json.)
 ```
 
-Streams mirrored pairs of `WeightedAgent(candidate)` vs
-`WeightedAgent(baseline)` and computes the trinomial GSPRT log-likelihood
-ratio after each pair, stopping the moment either hypothesis is accepted.
+Streams mirrored pairs of candidate vs baseline and computes the trinomial
+GSPRT log-likelihood ratio after each pair, stopping the moment either
+hypothesis is accepted. `--candidate`/`--baseline` take a full **agent spec**,
+so you can SPRT any two agents — e.g. `--candidate mcts:64:heuristic
+--baseline heuristic`. A bare weights path is shorthand for `weighted:PATH`
+(so the weight-tuning workflow above is unchanged).
 
 ## `tactica replay` — byte-identical re-simulation
 
