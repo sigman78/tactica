@@ -16,7 +16,7 @@ import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from tactica.actions import Action, ActionType, BOARD_H, BOARD_W, cell_xy
+from tactica.actions import Action, ActionType, BOARD_H, BOARD_W, cell_xy, is_melee
 from tactica.agents import Agent, make_agent
 from tactica.battle import (
     CHARGE_DISTANCE,
@@ -102,7 +102,7 @@ class GameSession:
             desc = f"{actor_label} {verb} {_stack_label(target)}"
             event["t"] = "attack"
             event["target"] = target.uid
-            event["melee"] = action.type == ActionType.MELEE_ATTACK
+            event["melee"] = is_melee(action.type)
 
         b.step(action)
         self.actions.append(action.id)
@@ -160,26 +160,33 @@ class GameSession:
         if b.is_terminal() or b.current_player() != self.human_side:
             return []
         actor = b.active_stack()
+        reach = b.reachable(actor)
+        # default melee direction id per enemy uid, for the auto/one-click path
+        defaults: dict[int, int] = {}
+        for e in b.stacks.values():
+            if e.alive and e.side != actor.side:
+                d = b.default_melee(actor, e, reach)
+                if d is not None:
+                    defaults[e.uid] = Action(d, e.cell).id
         out = []
         for a in b.legal_actions():
             entry: dict = {"id": a.id, "type": a.type.name}
-            if a.type in (ActionType.MOVE, ActionType.MELEE_ATTACK,
-                          ActionType.RANGED_ATTACK):
+            melee = is_melee(a.type)
+            if a.type == ActionType.MOVE or melee or a.type == ActionType.RANGED_ATTACK:
                 x, y = cell_xy(a.target_cell)
                 entry.update(x=x, y=y)
-            if a.type in (ActionType.MELEE_ATTACK, ActionType.RANGED_ATTACK):
+            if melee or a.type == ActionType.RANGED_ATTACK:
                 target = next(s for s in b.stacks.values()
                               if s.alive and s.cell == a.target_cell)
-                melee = a.type == ActionType.MELEE_ATTACK
                 moved = 0
                 if melee:
                     entry["retaliates"] = target.retaliations_left > 0
-                    approach = b._melee_approach(actor, target)
-                    if approach is not None:
-                        cell, moved = approach
-                        if cell != actor.cell:
-                            ax, ay = cell_xy(cell)
-                            entry["from"] = {"x": ax, "y": ay}
+                    approach = b.approach_cell(a.target_cell, a.type)
+                    moved = 0 if approach == actor.cell else reach[approach]
+                    ax, ay = cell_xy(approach)
+                    entry["from"] = {"x": ax, "y": ay}
+                    entry["dir"] = a.type.name
+                    entry["is_default"] = a.id == defaults.get(target.uid)
                 entry["est"] = _expected_damage(actor, target, melee, moved)
                 entry["target_uid"] = target.uid
             out.append(entry)

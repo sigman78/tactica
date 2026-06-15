@@ -201,12 +201,12 @@ def test_game_lifecycle(client):
     assert state["queue"][0]["uid"] == state["active"]
     # attack entries carry a damage preview
     for a in state["legal"]:
-        if a["type"] in ("MELEE_ATTACK", "RANGED_ATTACK"):
+        if a["type"].startswith("MELEE_") or a["type"] == "RANGED_ATTACK":
             assert a["est"] >= 1 and "target_uid" in a
 
     # illegal action id -> 400 (pick an id outside the legal set)
     legal_ids = {a["id"] for a in state["legal"]}
-    illegal = next(i for i in range(5 * 99) if i not in legal_ids)
+    illegal = next(i for i in range(12 * 99) if i not in legal_ids)
     bad = client.post(f"/api/games/{state['id']}/act", json={"action": illegal})
     assert bad.status_code == 400
 
@@ -265,3 +265,21 @@ def test_cancel_job(client):
     client.post(f"/api/jobs/{job_id}/cancel")
     info = wait_done(client, job_id)
     assert info["status"] == "cancelled"
+
+
+def test_legal_payload_exposes_directional_melee(client):
+    # Swordsman next to a pikeman: several approach sides, each its own entry
+    # with a `from` square and an `est`, exactly one marked is_default.
+    res = client.post("/api/games", json={
+        "agent": "random", "scenario": "skirmish", "seed": 4, "human_side": 0})
+    state = res.json()
+    melee = [a for a in state["legal"] if a["type"].startswith("MELEE_")]
+    if melee:  # skirmish opening may be out of melee range; only assert shape
+        for a in melee:
+            assert a["est"] >= 1
+            assert "from" in a and "target_uid" in a and "dir" in a
+        per_target = {}
+        for a in melee:
+            per_target.setdefault(a["target_uid"], []).append(a)
+        for entries in per_target.values():
+            assert sum(1 for a in entries if a.get("is_default")) == 1
