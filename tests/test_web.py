@@ -290,6 +290,10 @@ def test_legal_payload_exposes_directional_melee():
         agent_spec="random", human_side=battle.current_player(),
         scenario_name=sc.name, seed=1)
 
+    # web-produced records are stamped with the current ruleset
+    from tactica.battle import RULES_VERSION
+    assert session.record().rules_version == RULES_VERSION
+
     melee = [a for a in session.state()["legal"]
              if a["type"].startswith("MELEE_")]
     assert melee, "adjacent enemy must offer directional melee"
