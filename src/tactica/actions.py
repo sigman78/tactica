@@ -17,10 +17,48 @@ N_CELLS = BOARD_W * BOARD_H
 
 class ActionType(IntEnum):
     MOVE = 0
-    MELEE_ATTACK = 1
-    RANGED_ATTACK = 2
-    WAIT = 3
-    DEFEND = 4
+    MELEE_N = 1
+    MELEE_NE = 2
+    MELEE_E = 3
+    MELEE_SE = 4
+    MELEE_S = 5
+    MELEE_SW = 6
+    MELEE_W = 7
+    MELEE_NW = 8
+    RANGED_ATTACK = 9
+    WAIT = 10
+    DEFEND = 11
+
+
+# Approach cell offset (dx, dy) relative to the TARGET cell, per melee
+# direction. MELEE_W means the attacker stands west of the target and
+# strikes east. Order matches the 8-neighborhood.
+MELEE_OFFSETS: dict[ActionType, tuple[int, int]] = {
+    ActionType.MELEE_N: (0, -1),
+    ActionType.MELEE_NE: (1, -1),
+    ActionType.MELEE_E: (1, 0),
+    ActionType.MELEE_SE: (1, 1),
+    ActionType.MELEE_S: (0, 1),
+    ActionType.MELEE_SW: (-1, 1),
+    ActionType.MELEE_W: (-1, 0),
+    ActionType.MELEE_NW: (-1, -1),
+}
+MELEE_TYPES: tuple[ActionType, ...] = tuple(MELEE_OFFSETS)
+_OFFSET_TO_MELEE: dict[tuple[int, int], ActionType] = {
+    off: t for t, off in MELEE_OFFSETS.items()
+}
+
+
+def is_melee(t: ActionType) -> bool:
+    return t in MELEE_OFFSETS
+
+
+def melee_offset(t: ActionType) -> tuple[int, int]:
+    return MELEE_OFFSETS[t]
+
+
+def melee_type_for_offset(dx: int, dy: int) -> ActionType:
+    return _OFFSET_TO_MELEE[(dx, dy)]
 
 
 N_ACTIONS = len(ActionType) * N_CELLS
