@@ -19,8 +19,9 @@ What's left:
   weight ordering. NOT yet checked: absolute non-regression vs a *pre-charge
   build* (the weights file is unchanged; only the code is, so SPRT can't pit
   old code against new). If desired, snapshot the pre-charge engine, regenerate
-  its default agent, and SPRT new-vs-old; or just confirm absolute strength
-  with `tactica tournament weighted heuristic random`.
+  its default agent, and SPRT new-vs-old. Going forward, ladder win-rates are
+  guarded by `tests/test_strength_regression.py` (banded; re-bless on
+  intentional changes).
 - Optionally add an explicit feature (`charge_available` or raw `cells_moved`)
   so the linear model can value setting up a charge directly, not just via the
   doubled `damage_dealt`.
