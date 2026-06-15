@@ -132,3 +132,6 @@ def test_weighted_picks_legal_action_with_directional_melee() -> None:
         b.step(Action(ActionType.DEFEND))
     action = WeightedAgent().act(b)
     assert b.legal_action_mask()[action.id]
+    # aggressive default weights strike the adjacent pikeman, not DEFEND
+    assert is_melee(action.type)
+    assert action.target_cell == xy_cell(5, 4)
