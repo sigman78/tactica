@@ -1044,7 +1044,7 @@ function renderPlay(st) {
     over.classList.add("hidden");
     const active = st.stacks.find((s) => s.uid === st.active);
     $("#play-hint").textContent = active
-      ? `to act: ${active.unit} ×${active.count} (speed ${active.speed}, init ${active.initiative})`
+      ? `to act: ${active.unit} ×${active.count} (speed ${active.speed})`
       : "";
   }
 

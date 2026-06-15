@@ -21,7 +21,15 @@ anywhere a scenario name is accepted:
 
 **New unit type** — add a member to `UnitType` and a `UnitStats` row to
 `STATS` in `src/tactica/units.py`, plus a glyph in `GLYPHS`. Scenarios can
-use the new unit by name immediately.
+use the new unit by name immediately. Specials are declared via the
+`perks` field (e.g. `perks=frozenset({Perk.CHARGE})`).
+
+**New perk** — add a member to `Perk` in `units.py`, then implement it at
+the matching hook in `battle.py` (damage perks live in
+`Battle.compute_damage`). Keep one implementation point per perk, and
+mirror damage-affecting perks in `agents/weighted.py:expected_damage` and
+`web/games.py:_expected_damage`. Perks that change action *legality* need
+a hook in `Battle.legal_actions` instead.
 
 **New weights** — copy `weights/default.json`, tune, then validate with
 `tactica sprt --candidate yours.json --baseline weights/default.json`

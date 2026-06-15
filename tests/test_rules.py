@@ -104,6 +104,89 @@ class TestDamageFormula:
 
 
 # --------------------------------------------------------------------- #
+# Turn order
+
+
+class TestSpeedTurnOrder:
+    def test_faster_unit_acts_first_for_every_seed(self) -> None:
+        # Swordsman (speed 5) strictly outpaces archer (speed 4): no seed's
+        # tiebreak shuffle may ever put the archer first.
+        for seed in range(20):
+            b = battle_of(duel_scenario(unit0=A, count0=1, cell0=(0, 0),
+                                        unit1=S, count1=1, cell1=(10, 8)),
+                          seed)
+            assert b.active_stack().unit_type == S, f"seed {seed}"
+
+
+# --------------------------------------------------------------------- #
+# Perks
+
+
+class TestPerks:
+    def battle(self) -> Battle:
+        return det_battle(unit0=C, count0=1, cell0=(0, 0),
+                          unit1=P, count1=10, cell1=(10, 8))
+
+    def test_charge_doubles_melee_damage_when_moved_two_plus(self) -> None:
+        b = self.battle()
+        cav, pike = make_stack(0, 0, C, 1), make_stack(1, 1, P, 1)
+        # Cavalry avg 12.5, atk 15 vs def 5 -> x1.5 -> 18; charged x2 -> 37
+        assert b.compute_damage(cav, pike, melee=True, moved=0) == 18
+        assert b.compute_damage(cav, pike, melee=True, moved=2) == 37
+        assert b.compute_damage(cav, pike, melee=True, moved=7) == 37
+
+    def test_no_charge_under_two_cells(self) -> None:
+        b = self.battle()
+        cav, pike = make_stack(0, 0, C, 1), make_stack(1, 1, P, 1)
+        assert b.compute_damage(cav, pike, melee=True, moved=1) == 18
+
+    def test_charge_requires_the_perk(self) -> None:
+        b = self.battle()
+        sword, pike = make_stack(0, 0, S, 1), make_stack(1, 1, P, 1)
+        # Swordsman has no CHARGE: distance moved is irrelevant.
+        assert (b.compute_damage(sword, pike, melee=True, moved=5)
+                == b.compute_damage(sword, pike, melee=True, moved=0) == 9)
+
+    def test_melee_penalty_is_perk_gated(self,
+                                          monkeypatch: pytest.MonkeyPatch) -> None:
+        b = self.battle()
+        # Strip the archer's MELEE_PENALTY perk: melee damage is no longer
+        # halved even though the unit is still ranged.
+        monkeypatch.setitem(STATS, A,
+                            dataclasses.replace(STATS[A], perks=frozenset()))
+        archer, pike = make_stack(0, 0, A, 4), make_stack(1, 1, P, 1)
+        assert b.compute_damage(archer, pike, melee=True) == 10
+
+    def test_charge_applies_through_melee_attack_action(self) -> None:
+        # Cavalry walks 4 cells into the strike: 37 charged damage, not 18.
+        b = det_battle(unit0=C, count0=1, cell0=(0, 4),
+                       unit1=P, count1=10, cell1=(5, 4))
+        assert b.active_stack().unit_type == C  # speed 7 vs 4
+        pike = b.stacks[1]
+        b.step(Action(ActionType.MELEE_ATTACK, pike.cell))
+        assert pike.total_hp == 100 - 37
+
+    def test_adjacent_attack_does_not_charge(self) -> None:
+        b = det_battle(unit0=C, count0=1, cell0=(4, 4),
+                       unit1=P, count1=10, cell1=(5, 4))
+        assert b.active_stack().unit_type == C
+        pike = b.stacks[1]
+        b.step(Action(ActionType.MELEE_ATTACK, pike.cell))
+        assert pike.total_hp == 100 - 18
+
+    def test_retaliation_never_charges(self) -> None:
+        # Cavalry mirror: the attacker charges in (25 = 12 x2), but the
+        # defender's retaliation is struck standing still (12).
+        b = det_battle(unit0=C, count0=1, cell0=(0, 4),
+                       unit1=C, count1=1, cell1=(4, 4))
+        attacker = b.active_stack()
+        defender = next(s for s in b.stacks.values() if s is not attacker)
+        b.step(Action(ActionType.MELEE_ATTACK, defender.cell))
+        assert defender.total_hp == 50 - 25
+        assert attacker.total_hp == 50 - 12
+
+
+# --------------------------------------------------------------------- #
 # Stack kill arithmetic
 
 
@@ -144,7 +227,7 @@ class TestStackArithmetic:
 
 def three_stack_battle() -> Battle:
     """Two side-0 swordsmen flanking one side-1 swordsman, all adjacent.
-    Swordsman mirror keeps initiative ties resolved by the seeded shuffle."""
+    Swordsman mirror keeps speed ties resolved by the seeded shuffle."""
     sc = Scenario(
         name="retal",
         army0=(ArmySlot(S, 5, xy_cell(4, 4)), ArmySlot(S, 5, xy_cell(6, 4))),
@@ -199,7 +282,7 @@ class TestRetaliation:
     def test_ranged_attack_draws_no_retaliation(self) -> None:
         b = battle_of(duel_scenario(unit0=A, count0=5, cell0=(0, 4),
                                     unit1=S, count1=5, cell1=(10, 4)))
-        # Archer has higher initiative (5 vs... swordsman 5) -- tie. Find archer turn.
+        # Swordsman (speed 5) acts before archer (4); skip to the archer turn.
         while b.active_stack().unit_type != A:
             b.step(Action(ActionType.DEFEND))
         archer = b.active_stack()
@@ -216,7 +299,7 @@ class TestRetaliation:
 
 class TestWaitOrdering:
     def setup_battle(self) -> Battle:
-        # Cavalry init 8 acts before pikeman init 4.
+        # Cavalry (speed 7) acts before pikeman (speed 4).
         return battle_of(duel_scenario(unit0=C, count0=1, cell0=(0, 0),
                                        unit1=P, count1=1, cell1=(10, 8)))
 
@@ -244,12 +327,12 @@ class TestWaitOrdering:
         with pytest.raises(ValueError):
             b.step(Action(ActionType.WAIT))
 
-    def test_wait_phase_runs_in_reverse_initiative(self) -> None:
+    def test_wait_phase_runs_in_reverse_speed(self) -> None:
         b = self.setup_battle()
         cav, pike = b.stacks[0], b.stacks[1]
         b.step(Action(ActionType.WAIT))  # cavalry waits
         b.step(Action(ActionType.WAIT))  # pikeman waits
-        # Reverse initiative: pikeman (4) before cavalry (8).
+        # Reverse speed: pikeman (4) before cavalry (7).
         assert b.active_stack() is pike
         b.step(Action(ActionType.DEFEND))
         assert b.active_stack() is cav
@@ -343,7 +426,7 @@ class TestFlyerMovement:
 
 
 def test_defend_lasts_until_own_next_turn() -> None:
-    # Swordsman (init 5) acts before pikeman (init 4) every round.
+    # Swordsman (speed 5) acts before pikeman (speed 4) every round.
     b = battle_of(duel_scenario(unit0=S, count0=1, cell0=(5, 4),
                                 unit1=P, count1=1, cell1=(6, 4)))
     sword, pike = b.stacks[0], b.stacks[1]

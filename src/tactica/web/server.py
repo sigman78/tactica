@@ -71,7 +71,7 @@ def create_app(presets_dir: str | Path = "experiments",
                        "attack": s.attack, "defense": s.defense,
                        "dmg": [s.dmg_min, s.dmg_max], "hp": s.hp,
                        "ranged": s.is_ranged, "flyer": s.is_flyer,
-                       "initiative": s.initiative}
+                       "perks": sorted(p.name for p in s.perks)}
                       for t, s in STATS.items()],
             "weights": [Path(w).relative_to(root).as_posix()
                         if Path(w).is_absolute() else w for w in weights],

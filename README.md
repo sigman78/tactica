@@ -7,7 +7,7 @@ A HoMM-style turn-based tactics sandbox for exploring, testing, and evolving
 game-playing AI. The package is three things:
 
 1. a **headless, deterministic rules engine** (11x9 grid, creature stacks,
-   initiative order, retaliation, ranged/melee/flyers),
+   speed-based turn order, retaliation, ranged/melee/flyers, unit perks),
 2. an **agent ladder** from uniform-random to flat-UCT MCTS,
 3. **evaluation tooling** built for statistical rigor: mirrored pairs, common
    random numbers, noise floors, skill curves, SPRT, and byte-identical

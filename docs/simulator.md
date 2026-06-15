@@ -31,7 +31,7 @@ class Battle:
 - **Randomness**: a single `np.random.Generator` owned by the battle, seeded
   at construction. No `random` module, no global RNG, anywhere.
   `Scenario(deterministic=True)` replaces damage rolls with expected values —
-  the same API with zero chance nodes (the initiative tie-shuffle happens at
+  the same API with zero chance nodes (the turn-order tie-shuffle happens at
   construction and is fixed by the seed).
 - **State hash**: `Battle.state_hash()` digests stacks, queue, round, and
   RNG state; replays must reproduce it byte-identically.
@@ -43,9 +43,18 @@ obstacles/units in transit but land on free cells). Stacks are
 `(unit_type, count, top_hp)`; damage kills whole creatures, the remainder
 dents the top one. HoMM damage: `dmg_roll * count`, modified 5% per point of
 attack-defense difference, clamped to [0.3x, 3x]. Each round every living
-stack acts once in initiative order (ties broken by a shuffle seeded at
-battle start); WAIT defers a stack once per round to a reverse-initiative
-wait phase; DEFEND grants +2 defense until the stack's next turn. Melee
-draws one retaliation per defender per round; ranged attacks don't, but a
-shooter with an adjacent enemy cannot shoot and melees at half damage. A
-side with no stacks loses; 100 rounds is a draw.
+stack acts once in speed order, HoMM3-style — turn order is derived from
+speed, computed at round start only (ties broken by a shuffle seeded at
+battle start); WAIT defers a stack once per round to a reverse-speed wait
+phase; DEFEND grants +2 defense until the stack's next turn. Melee draws
+one retaliation per defender per round; ranged attacks don't, but a shooter
+with an adjacent enemy cannot shoot. A side with no stacks loses; 100
+rounds is a draw.
+
+Unit specials are **perks**: data flags on `UnitStats` (`Perk` enum in
+`units.py`), each implemented at exactly one hook in `battle.py`.
+Current perks: `MELEE_PENALTY` (archer) — any melee strike, attack or
+retaliation, at x0.5; `CHARGE` (cavalry) — melee damage x2 when the
+attacker travelled >= 2 cells as part of the attack action (BFS path
+length, so walls count; retaliations and stand-and-fight strikes count as
+0 cells).
