@@ -12,7 +12,7 @@ import math
 
 import numpy as np
 
-from tactica.actions import Action, ActionType
+from tactica.actions import Action, ActionType, is_melee
 from tactica.agents.base import Agent
 from tactica.battle import Battle
 from tactica.agents.heuristic import stack_value
@@ -63,7 +63,7 @@ class MCTSAgent(Agent):
         fixed or uniform order would routinely leave every attack untried."""
         attacks, control, moves = [], [], []
         for i, a in enumerate(root_actions):
-            if a.type in (ActionType.MELEE_ATTACK, ActionType.RANGED_ATTACK):
+            if is_melee(a.type) or a.type == ActionType.RANGED_ATTACK:
                 attacks.append(i)
             elif a.type in (ActionType.WAIT, ActionType.DEFEND):
                 control.append(i)
@@ -72,8 +72,29 @@ class MCTSAgent(Agent):
         shuffled = lambda xs: [xs[int(i)] for i in self.rng.permutation(len(xs))]
         return shuffled(attacks) + control + shuffled(moves)
 
+    def _root_arms(self, battle: Battle) -> list[Action]:
+        """Collapse the 8 melee directions per target into a single
+        charge-aware default arm; pass non-melee actions through. Keeps the
+        bandit's arm count at the pre-directional-melee shape."""
+        s = battle.active_stack()
+        reach = battle.reachable(s)
+        arms: list[Action] = []
+        seen_targets: set[int] = set()
+        for a in battle.legal_actions():
+            if is_melee(a.type):
+                if a.target_cell in seen_targets:
+                    continue
+                seen_targets.add(a.target_cell)
+                target = battle._stack_at(a.target_cell)
+                d = battle.default_melee(s, target, reach)
+                if d is not None:
+                    arms.append(Action(d, a.target_cell))
+            else:
+                arms.append(a)
+        return arms
+
     def act(self, battle: Battle) -> Action:
-        root_actions = battle.legal_actions()
+        root_actions = self._root_arms(battle)
         if len(root_actions) == 1:
             return root_actions[0]
         player = battle.current_player()

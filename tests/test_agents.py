@@ -78,7 +78,8 @@ def test_mcts_takes_a_winning_kill() -> None:
     while b.active_stack().unit_type != UnitType.CAVALRY:
         b.step(Action(ActionType.DEFEND))
     action = MCTSAgent(simulations=40, seed=1).act(b)
-    assert action == Action(ActionType.MELEE_ATTACK, xy_cell(6, 4))
+    assert is_melee(action.type)
+    assert action.target_cell == xy_cell(6, 4)
 
 
 def test_mcts_handles_fewer_sims_than_actions() -> None:
