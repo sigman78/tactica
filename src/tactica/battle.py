@@ -33,11 +33,15 @@ import numpy as np
 from tactica.actions import (
     BOARD_H,
     BOARD_W,
+    MELEE_TYPES,
     N_ACTIONS,
     N_CELLS,
     Action,
     ActionType,
     cell_xy,
+    is_melee,
+    melee_offset,
+    melee_type_for_offset,
 )
 from tactica.scenario import Scenario
 from tactica.units import GLYPHS, STATS, Perk, UnitStats, UnitType
@@ -260,24 +264,37 @@ class Battle:
             frontier = nxt
         return out
 
-    def _melee_approach(self, attacker: Stack, target: Stack,
-                        reach: dict[int, int] | None = None
-                        ) -> tuple[int, int] | None:
-        """(cell, distance) the attacker strikes from, or None if
-        unreachable. Distance is the BFS path length (honest around
-        obstacles), feeding Perk.CHARGE. Deterministic: stay put if already
-        adjacent, else the reachable adjacent cell with minimal
-        (distance, cell index). ``reach`` is computed lazily when not
-        supplied."""
-        if chebyshev(attacker.cell, target.cell) == 1:
-            return attacker.cell, 0
+    def approach_cell(self, target_cell: int, melee_type: ActionType) -> int | None:
+        """The cell a directional melee strikes from (neighbor of the target
+        in the given direction), or None if it falls off the board."""
+        dx, dy = melee_offset(melee_type)
+        tx, ty = cell_xy(target_cell)
+        ax, ay = tx + dx, ty + dy
+        if 0 <= ax < BOARD_W and 0 <= ay < BOARD_H:
+            return ay * BOARD_W + ax
+        return None
+
+    def default_melee(self, attacker: Stack, target: Stack,
+                      reach: dict[int, int] | None = None) -> ActionType | None:
+        """Charge-aware default approach direction against ``target``:
+        maximize charge, then minimize distance, then cell index. None if no
+        side is reachable. Reproduces minimal-distance approach for units
+        without Perk.CHARGE."""
         if reach is None:
             reach = self.reachable(attacker)
-        options = [(reach[c], c) for c in adjacent_cells(target.cell) if c in reach and c != attacker.cell]
-        if not options:
-            return None
-        dist, cell = min(options)
-        return cell, dist
+        best_key: tuple[bool, int, int] | None = None
+        best_type: ActionType | None = None
+        for t in MELEE_TYPES:
+            approach = self.approach_cell(target.cell, t)
+            if approach is None or approach not in reach:
+                continue
+            dist = reach[approach]
+            charges = (Perk.CHARGE in attacker.stats.perks
+                       and dist >= CHARGE_DISTANCE)
+            key = (not charges, dist, approach)
+            if best_key is None or key < best_key:
+                best_key, best_type = key, t
+        return best_type
 
     def _enemy_adjacent(self, stack: Stack) -> bool:
         adj = set(adjacent_cells(stack.cell))
@@ -295,8 +312,10 @@ class Battle:
             if dist > 0:
                 actions.append(Action(ActionType.MOVE, cell))
         for e in enemies:
-            if self._melee_approach(s, e, reach) is not None:
-                actions.append(Action(ActionType.MELEE_ATTACK, e.cell))
+            for t in MELEE_TYPES:
+                approach = self.approach_cell(e.cell, t)
+                if approach is not None and approach in reach:
+                    actions.append(Action(t, e.cell))
         if s.stats.is_ranged and not self._enemy_adjacent(s):
             for e in enemies:
                 actions.append(Action(ActionType.RANGED_ATTACK, e.cell))
@@ -375,13 +394,13 @@ class Battle:
             s.defending = True
         elif action.type == ActionType.MOVE:
             s.cell = action.target_cell
-        elif action.type == ActionType.MELEE_ATTACK:
+        elif is_melee(action.type):
             target = self._stack_at(action.target_cell)
             assert target is not None
-            approach = self._melee_approach(s, target)
+            approach = self.approach_cell(action.target_cell, action.type)
             assert approach is not None
-            cell, moved = approach
-            s.cell = cell
+            moved = 0 if approach == s.cell else self.reachable(s)[approach]
+            s.cell = approach
             self._melee_strike(s, target, retaliation=False, moved=moved)
         elif action.type == ActionType.RANGED_ATTACK:
             target = self._stack_at(action.target_cell)
@@ -419,7 +438,11 @@ class Battle:
                 attacks = [Action(ActionType.RANGED_ATTACK, e.cell)
                            for e in enemies]
             else:
-                attacks = [Action(ActionType.MELEE_ATTACK, c) for c in melee]
+                sx, sy = cell_xy(s.cell)
+                attacks = []
+                for c in melee:
+                    cx, cy = cell_xy(c)
+                    attacks.append(Action(melee_type_for_offset(sx - cx, sy - cy), c))
             if attacks and rng.random() < attack_bias:
                 action = attacks[int(rng.integers(len(attacks)))]
             else:
@@ -475,9 +498,10 @@ class Battle:
         target = self._stack_at(action.target_cell)
         if target is None or target.side == s.side:
             illegal("no enemy stack on target cell")
-        if t == ActionType.MELEE_ATTACK:
-            if self._melee_approach(s, target) is None:
-                illegal("cannot reach a cell adjacent to target")
+        if is_melee(t):
+            approach = self.approach_cell(action.target_cell, t)
+            if approach is None or approach not in self.reachable(s):
+                illegal("approach side not reachable")
         elif t == ActionType.RANGED_ATTACK:
             if not s.stats.is_ranged:
                 illegal("unit is not ranged")

@@ -6,7 +6,13 @@ import dataclasses
 
 import pytest
 
-from tactica.actions import Action, ActionType, xy_cell
+from tactica.actions import (
+    Action,
+    ActionType,
+    MELEE_TYPES,
+    is_melee,
+    xy_cell,
+)
 from tactica.battle import Battle, Stack
 from tactica.scenario import ArmySlot, Scenario
 from tactica.units import STATS, UnitType
@@ -23,6 +29,14 @@ def det_battle(**kwargs) -> Battle:
 def make_stack(uid: int, side: int, ut: UnitType, count: int,
                cell: int = 0) -> Stack:
     return Stack(uid, side, ut, count, STATS[ut].hp, cell)
+
+
+def default_melee_action(b, target_cell: int) -> Action:
+    """The battle's charge-aware default approach against the stack on
+    ``target_cell``, as a concrete directional Action."""
+    s = b.active_stack()
+    target = b._stack_at(target_cell)
+    return Action(b.default_melee(s, target), target_cell)
 
 
 # --------------------------------------------------------------------- #
@@ -103,6 +117,75 @@ class TestDamageFormula:
         assert len(seen) > 1  # rolls actually vary
 
 
+class TestDirectionalMelee:
+    def test_all_reachable_sides_are_legal(self) -> None:
+        b = battle_of(duel_scenario(unit0=S, count0=1, cell0=(0, 4),
+                                    unit1=P, count1=1, cell1=(3, 4)))
+        while b.active_stack().unit_type != S:
+            b.step(Action(ActionType.DEFEND))
+        target = xy_cell(3, 4)
+        melee = {a.type for a in b.legal_actions()
+                 if is_melee(a.type) and a.target_cell == target}
+        assert melee == set(MELEE_TYPES)
+
+    def test_offboard_side_is_illegal(self) -> None:
+        b = battle_of(duel_scenario(unit0=S, count0=1, cell0=(5, 4),
+                                    unit1=P, count1=1, cell1=(0, 0)))
+        while b.active_stack().unit_type != S:
+            b.step(Action(ActionType.DEFEND))
+        target = xy_cell(0, 0)
+        dirs = {a.type for a in b.legal_actions()
+                if is_melee(a.type) and a.target_cell == target}
+        assert dirs == {ActionType.MELEE_SE, ActionType.MELEE_S,
+                        ActionType.MELEE_E}
+
+    def test_strike_ends_attacker_on_chosen_side(self) -> None:
+        b = det_battle(unit0=S, count0=1, cell0=(0, 4),
+                       unit1=P, count1=10, cell1=(5, 4))
+        assert b.active_stack().unit_type == S
+        b.step(Action(ActionType.MELEE_W, xy_cell(5, 4)))
+        assert b.stacks[0].cell == xy_cell(4, 4)
+
+    def test_direction_controls_charge(self) -> None:
+        far = det_battle(unit0=C, count0=1, cell0=(0, 4),
+                         unit1=P, count1=10, cell1=(5, 4))
+        far.step(Action(ActionType.MELEE_W, xy_cell(5, 4)))
+        charged = far.stacks[1].total_hp
+
+        near = det_battle(unit0=C, count0=1, cell0=(4, 4),
+                          unit1=P, count1=10, cell1=(5, 4))
+        near.step(Action(ActionType.MELEE_W, xy_cell(5, 4)))
+        not_charged = near.stacks[1].total_hp
+        assert charged < not_charged
+
+    def test_unreachable_side_raises(self) -> None:
+        wall = frozenset(xy_cell(6, y) for y in range(9))
+        b = battle_of(duel_scenario(unit0=S, count0=1, cell0=(0, 4),
+                                    unit1=P, count1=1, cell1=(5, 4),
+                                    obstacles=wall))
+        while b.active_stack().unit_type != S:
+            b.step(Action(ActionType.DEFEND))
+        with pytest.raises(ValueError):
+            b.step(Action(ActionType.MELEE_E, xy_cell(5, 4)))
+
+    def test_default_melee_prefers_charge_for_cavalry(self) -> None:
+        b = det_battle(unit0=C, count0=1, cell0=(0, 4),
+                       unit1=P, count1=10, cell1=(5, 4))
+        s = b.active_stack()
+        target = b.stacks[1]
+        d = b.default_melee(s, target)
+        approach = b.approach_cell(target.cell, d)
+        assert b.reachable(s)[approach] >= 2
+
+    def test_default_melee_minimal_for_non_charger(self) -> None:
+        b = det_battle(unit0=S, count0=1, cell0=(4, 4),
+                       unit1=P, count1=10, cell1=(5, 4))
+        s = b.active_stack()
+        target = b.stacks[1]
+        d = b.default_melee(s, target)
+        assert b.approach_cell(target.cell, d) == s.cell
+
+
 # --------------------------------------------------------------------- #
 # Turn order
 
@@ -163,7 +246,7 @@ class TestPerks:
                        unit1=P, count1=10, cell1=(5, 4))
         assert b.active_stack().unit_type == C  # speed 7 vs 4
         pike = b.stacks[1]
-        b.step(Action(ActionType.MELEE_ATTACK, pike.cell))
+        b.step(default_melee_action(b, pike.cell))
         assert pike.total_hp == 100 - 37
 
     def test_adjacent_attack_does_not_charge(self) -> None:
@@ -171,7 +254,7 @@ class TestPerks:
                        unit1=P, count1=10, cell1=(5, 4))
         assert b.active_stack().unit_type == C
         pike = b.stacks[1]
-        b.step(Action(ActionType.MELEE_ATTACK, pike.cell))
+        b.step(Action(ActionType.MELEE_W, pike.cell))
         assert pike.total_hp == 100 - 18
 
     def test_retaliation_never_charges(self) -> None:
@@ -181,7 +264,7 @@ class TestPerks:
                        unit1=C, count1=1, cell1=(4, 4))
         attacker = b.active_stack()
         defender = next(s for s in b.stacks.values() if s is not attacker)
-        b.step(Action(ActionType.MELEE_ATTACK, defender.cell))
+        b.step(default_melee_action(b, defender.cell))
         assert defender.total_hp == 50 - 25
         assert attacker.total_hp == 50 - 12
 
@@ -250,7 +333,7 @@ class TestRetaliation:
                 break
             s = b.active_stack()
             if s.side == 0:
-                b.step(Action(ActionType.MELEE_ATTACK, defender.cell))
+                b.step(default_melee_action(b, defender.cell))
                 hits += 1
             else:
                 b.step(Action(ActionType.DEFEND))
@@ -270,7 +353,7 @@ class TestRetaliation:
             s = b.active_stack()
             if s.side == 0 and defender.alive:
                 before = s.total_hp
-                b.step(Action(ActionType.MELEE_ATTACK, defender.cell))
+                b.step(default_melee_action(b, defender.cell))
                 if s.total_hp < before:
                     retaliations += 1
                     rounds_seen.append(b.round)
@@ -358,7 +441,7 @@ class TestRangedBlocking:
             b.step(Action(ActionType.DEFEND))
         types = {a.type for a in b.legal_actions()}
         assert ActionType.RANGED_ATTACK not in types
-        assert ActionType.MELEE_ATTACK in types
+        assert any(is_melee(t) for t in types)
         with pytest.raises(ValueError):
             b.step(Action(ActionType.RANGED_ATTACK, xy_cell(6, 4)))
 
@@ -435,11 +518,11 @@ def test_defend_lasts_until_own_next_turn() -> None:
     assert pike.defending
     # Round 2: swordsman strikes the still-defending pikeman: 8 not 9 damage.
     assert b.active_stack() is sword
-    b.step(Action(ActionType.MELEE_ATTACK, pike.cell))
+    b.step(default_melee_action(b, pike.cell))
     assert pike.top_hp == 10 - 8
     # Pikeman's own turn clears its defend flag.
     assert b.active_stack() is pike
-    b.step(Action(ActionType.MELEE_ATTACK, sword.cell))
+    b.step(default_melee_action(b, sword.cell))
     assert not pike.defending
 
 
@@ -452,7 +535,7 @@ def test_battle_ends_when_side_wiped() -> None:
                                 unit1=P, count1=1, cell1=(6, 4)))
     while b.active_stack().unit_type != C:
         b.step(Action(ActionType.DEFEND))
-    b.step(Action(ActionType.MELEE_ATTACK, xy_cell(6, 4)))  # 125+ dmg vs 10 hp
+    b.step(default_melee_action(b, xy_cell(6, 4)))  # 125+ dmg vs 10 hp
     assert b.is_terminal()
     assert b.winner() == 0
     assert b.returns() == (1.0, -1.0)
