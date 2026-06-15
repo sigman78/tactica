@@ -530,3 +530,8 @@ g.target-group.target-ranged {
 @media (max-width: 1100px) {
   #replay-layout { grid-template-columns: 1fr; }
 }
+
+.approach-marker { fill: rgba(220, 80, 60, 0.45); stroke: #e0503c;
+  stroke-width: 1.5; cursor: pointer; }
+.approach-marker:hover { fill: rgba(220, 80, 60, 0.8); }
+.approach-marker.default { stroke-width: 2.5; }

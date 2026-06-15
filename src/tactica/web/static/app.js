@@ -1124,12 +1124,16 @@ function drawPlayBoard(st) {
       class: "obstacle", rx: 4 }));
   }
 
-  // best attack per enemy stack: prefer the ranged option when both exist
+  const isMeleeType = (t) => t.startsWith("MELEE_");
+  // enemy-click default: ranged if present, else the is_default melee side
   const attacks = new Map();
   for (const a of st.legal) {
-    if (a.type !== "MELEE_ATTACK" && a.type !== "RANGED_ATTACK") continue;
-    const prev = attacks.get(a.target_uid);
-    if (!prev || a.type === "RANGED_ATTACK") attacks.set(a.target_uid, a);
+    if (a.type === "RANGED_ATTACK") { attacks.set(a.target_uid, a); }
+  }
+  for (const a of st.legal) {
+    if (isMeleeType(a.type) && a.is_default && !attacks.has(a.target_uid)) {
+      attacks.set(a.target_uid, a);
+    }
   }
 
   // move overlays under the stacks
@@ -1140,6 +1144,19 @@ function drawPlayBoard(st) {
       rx: 5, class: "move-overlay",
       onclick: () => playAct(a.id) },
       el("title", {}, `move to (${a.x},${a.y})`)));
+  }
+
+  // directional melee: a clickable "strike from here" marker on each reachable
+  // approach square, layered above the move overlays.
+  for (const a of st.legal) {
+    if (!isMeleeType(a.type) || !a.from) continue;
+    const cx = a.from.x * CELL + CELL / 2;
+    const cy = a.from.y * CELL + CELL / 2;
+    svg.append(el("polygon", {
+      points: `${cx},${cy - 9} ${cx + 9},${cy} ${cx},${cy + 9} ${cx - 9},${cy}`,
+      class: "approach-marker" + (a.is_default ? " default" : ""),
+      onclick: (ev) => { ev.stopPropagation(); playAct(a.id); } },
+      el("title", {}, `strike from (${a.from.x},${a.from.y}) · ~${a.est} dmg`)));
   }
 
   state.playGroups = new Map();
