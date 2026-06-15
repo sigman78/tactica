@@ -39,7 +39,7 @@ class GameRecord:
     winner: int | None
     rounds: int
     state_hash: str
-    rules_version: int = 1
+    rules_version: int = RULES_VERSION  # from_dict still defaults legacy rows to 1
 
     def score(self, side: int) -> float:
         """1 / 0.5 / 0 for the given side."""
@@ -151,6 +151,11 @@ def read_jsonl(path: str | Path) -> list[dict]:
 def replay_game(record: GameRecord,
                 on_step: Callable[[Battle, Action], None] | None = None) -> Battle:
     """Re-simulate a logged game; raises if the final state hash differs."""
+    if record.rules_version != RULES_VERSION:
+        raise ValueError(
+            f"replay recorded under rules_version {record.rules_version}, "
+            f"current is {RULES_VERSION}; action ids would mis-decode -- "
+            f"regenerate the replay")
     scenario = Scenario.from_dict(record.scenario)
     battle = Battle.from_scenario(scenario, record.seed)
     for action_id in record.actions:

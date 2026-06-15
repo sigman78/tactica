@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from tactica.actions import BOARD_H, BOARD_W, Action, cell_xy
-from tactica.battle import Battle
+from tactica.battle import Battle, RULES_VERSION
 from tactica.scenario import Scenario
 from tactica.units import GLYPHS
 
@@ -31,6 +31,11 @@ def game_frames(record: dict) -> dict:
     """One frame per action (plus the initial deployment), with stack
     positions/HP and the acting stack highlighted. Verifies the final
     state hash like ``tactica replay`` does."""
+    if int(record.get("rules_version", 1)) != RULES_VERSION:
+        raise ValueError(
+            f"replay recorded under rules_version "
+            f"{record.get('rules_version', 1)}, current is {RULES_VERSION}; "
+            f"action ids would mis-decode -- regenerate the replay")
     scenario = Scenario.from_dict(record["scenario"])
     battle = Battle.from_scenario(scenario, int(record["seed"]))
     frames = [_snapshot(battle, None, None)]

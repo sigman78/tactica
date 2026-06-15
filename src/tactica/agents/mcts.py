@@ -84,7 +84,7 @@ class MCTSAgent(Agent):
         reach = battle.reachable(s)
         arms: list[Action] = []
         seen_targets: set[int] = set()
-        for a in battle.legal_actions():
+        for a in battle.legal_actions(reach=reach):
             if is_melee(a.type):
                 if a.target_cell in seen_targets:
                     continue

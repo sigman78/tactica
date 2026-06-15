@@ -185,6 +185,22 @@ class TestDirectionalMelee:
         d = b.default_melee(s, target)
         assert b.approach_cell(target.cell, d) == s.cell
 
+    def test_default_melee_none_when_target_fully_walled(self) -> None:
+        # Pikeman boxed in by obstacles on all 8 sides: no approach is
+        # reachable, so default_melee returns None and no melee is legal.
+        walls = frozenset(
+            xy_cell(5 + dx, 4 + dy)
+            for dx in (-1, 0, 1) for dy in (-1, 0, 1) if (dx, dy) != (0, 0))
+        b = battle_of(duel_scenario(unit0=S, count0=1, cell0=(0, 4),
+                                    unit1=P, count1=1, cell1=(5, 4),
+                                    obstacles=walls))
+        while b.active_stack().unit_type != S:
+            b.step(Action(ActionType.DEFEND))
+        s = b.active_stack()
+        target = b._stack_at(xy_cell(5, 4))
+        assert b.default_melee(s, target) is None
+        assert not any(is_melee(a.type) for a in b.legal_actions())
+
 
 # --------------------------------------------------------------------- #
 # Turn order

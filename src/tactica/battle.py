@@ -304,9 +304,10 @@ class Battle:
     # ------------------------------------------------------------------ #
     # Legal actions
 
-    def legal_actions(self) -> list[Action]:
+    def legal_actions(self, reach: dict[int, int] | None = None) -> list[Action]:
         s = self.active_stack()
-        reach = self.reachable(s)
+        if reach is None:
+            reach = self.reachable(s)  # callers may pass a precomputed dict for s
         enemies = self._living(1 - s.side)
         actions: list[Action] = []
         for cell, dist in reach.items():

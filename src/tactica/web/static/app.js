@@ -1096,9 +1096,11 @@ function stackGroup(s, { active = false, attack = null } = {}) {
     (s.impaired ? " · shooter blocked: melee only, half damage" : "");
   if (attack) {
     const verb = attack.type === "RANGED_ATTACK" ? "shoot" : "strike";
+    const movesIn = attack.from &&
+      (attack.from.x !== s.x || attack.from.y !== s.y);
     tip += `\n${verb}: ~${attack.est} dmg` +
       (attack.retaliates ? " · will retaliate" : "") +
-      (attack.from ? ` · charge via (${attack.from.x},${attack.from.y})` : "");
+      (movesIn ? ` · from (${attack.from.x},${attack.from.y})` : "");
     g.addEventListener("click", () => playAct(attack.id));
   }
   g.append(el("title", {}, tip));

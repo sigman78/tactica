@@ -11,7 +11,7 @@ class Battle:
     def reseed(self, seed: int) -> None              # fresh chance stream for search clones
     def current_player(self) -> int                  # 0 or 1
     def legal_actions(self) -> list[Action]
-    def legal_action_mask(self) -> np.ndarray        # bool, fixed size 5*11*9 = 495
+    def legal_action_mask(self) -> np.ndarray        # bool, fixed size 12*11*9 = 1188
     def step(self, action: Action) -> None           # mutates; raises ValueError on illegal
     def is_terminal(self) -> bool
     def returns(self) -> tuple[float, float]         # (+1,-1) / (-1,+1) / (0,0)

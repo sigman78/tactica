@@ -26,7 +26,8 @@ class HeuristicAgent(Agent):
 
     def act(self, battle: Battle) -> Action:
         s = battle.active_stack()
-        legal = battle.legal_actions()
+        reach = battle.reachable(s)  # shared by legal_actions and default_melee
+        legal = battle.legal_actions(reach=reach)
         by_type: dict[ActionType, list[Action]] = {}
         for a in legal:
             by_type.setdefault(a.type, []).append(a)
@@ -41,7 +42,6 @@ class HeuristicAgent(Agent):
                                              a.target_cell))
 
         # One charge-aware default-approach melee Action per reachable target.
-        reach = battle.reachable(s)
         melee_by_target: dict[int, Action] = {}
         for e in enemies.values():
             d = battle.default_melee(s, e, reach)

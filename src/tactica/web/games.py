@@ -169,7 +169,7 @@ class GameSession:
                 if d is not None:
                     defaults[e.uid] = Action(d, e.cell).id
         out = []
-        for a in b.legal_actions():
+        for a in b.legal_actions(reach=reach):
             entry: dict = {"id": a.id, "type": a.type.name}
             melee = is_melee(a.type)
             if a.type == ActionType.MOVE or melee or a.type == ActionType.RANGED_ATTACK:
