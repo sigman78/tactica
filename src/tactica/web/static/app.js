@@ -5,7 +5,7 @@ const $ = (sel) => document.querySelector(sel);
 
 function el(tag, attrs = {}, ...children) {
   const ns = "http://www.w3.org/2000/svg";
-  const svgTags = new Set(["svg", "rect", "line", "path", "text", "circle", "g", "polyline", "image"]);
+  const svgTags = new Set(["svg", "rect", "line", "path", "text", "circle", "g", "polyline", "polygon", "image"]);
   const node = svgTags.has(tag)
     ? document.createElementNS(ns, tag)
     : document.createElement(tag);
