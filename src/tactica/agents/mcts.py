@@ -5,6 +5,10 @@ are sampled implicitly across simulations), steps the chosen root action,
 then runs ``Battle.playout`` -- a fast random rollout policy -- for up to
 ``rollout_cap`` steps. If the rollout hits the cap without a result, a
 material-balance evaluation stands in for the terminal return.
+
+Directional melee is collapsed to one arm per target (the charge-aware
+``default_melee`` direction) by ``_root_arms`` before the bandit sees it, so
+the arm count stays at its pre-directional-melee shape.
 """
 from __future__ import annotations
 
@@ -86,9 +90,12 @@ class MCTSAgent(Agent):
                     continue
                 seen_targets.add(a.target_cell)
                 target = battle._stack_at(a.target_cell)
+                assert target is not None  # a legal melee implies a stack here
+                # legal_actions emitted a reachable side for this target, so
+                # default_melee (same reach) must find one too.
                 d = battle.default_melee(s, target, reach)
-                if d is not None:
-                    arms.append(Action(d, a.target_cell))
+                assert d is not None
+                arms.append(Action(d, a.target_cell))
             else:
                 arms.append(a)
         return arms
