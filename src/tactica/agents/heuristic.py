@@ -34,15 +34,20 @@ class HeuristicAgent(Agent):
         enemies = {e.cell: e for e in battle.stacks.values()
                    if e.alive and e.side != s.side}
 
+        # One default-approach melee Action per reachable target.
+        reach = battle.reachable(s)
+        melee_by_target: dict[int, Action] = {}
+        for e in enemies.values():
+            d = battle.default_melee(s, e, reach)
+            if d is not None:
+                melee_by_target[e.cell] = Action(d, e.cell)
+
         shots = by_type.get(ActionType.RANGED_ATTACK, [])
         if shots:
-            # Focus fire: shoot the target with the lowest remaining HP pool.
             return min(shots, key=lambda a: (enemies[a.target_cell].total_hp,
                                              a.target_cell))
 
         if s.stats.is_ranged:
-            # Shooting is blocked by an adjacent enemy: kite if it gains
-            # distance, otherwise melee the weakest adjacent enemy.
             here = min_enemy_distance(battle, s.cell, s.side)
             moves = by_type.get(ActionType.MOVE, [])
             if moves:
@@ -51,17 +56,16 @@ class HeuristicAgent(Agent):
                     -a.target_cell))
                 if min_enemy_distance(battle, best.target_cell, s.side) > here:
                     return best
-            melee = by_type.get(ActionType.MELEE_ATTACK, [])
-            if melee:
-                return min(melee, key=lambda a: (enemies[a.target_cell].total_hp,
-                                                 a.target_cell))
+            if melee_by_target:
+                return min(melee_by_target.values(),
+                           key=lambda a: (enemies[a.target_cell].total_hp,
+                                          a.target_cell))
             return Action(ActionType.DEFEND)
 
-        melee = by_type.get(ActionType.MELEE_ATTACK, [])
-        if melee:
-            # Hit the highest-value target.
-            return max(melee, key=lambda a: (stack_value(enemies[a.target_cell]),
-                                             -a.target_cell))
+        if melee_by_target:
+            return max(melee_by_target.values(),
+                       key=lambda a: (stack_value(enemies[a.target_cell]),
+                                      -a.target_cell))
 
         # Advance toward the highest-value enemy.
         target = max(enemies.values(), key=lambda e: (stack_value(e), -e.cell))

@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from importlib import resources
 from pathlib import Path
 
-from tactica.actions import Action, ActionType
+from tactica.actions import Action, ActionType, is_melee
 from tactica.agents.base import Agent
 from tactica.battle import (
     DAMAGE_MOD_MAX,
@@ -108,11 +108,11 @@ def action_features(battle: Battle, action: Action,
         f["defend"] = 1.0
     else:
         target = ctx.enemies[action.target_cell]
-        melee = action.type == ActionType.MELEE_ATTACK
+        melee = is_melee(action.type)
         if melee:
-            approach = battle._melee_approach(s, target, ctx.reach)
+            approach = battle.approach_cell(action.target_cell, action.type)
             if approach is not None:
-                after_cell = approach[0]
+                after_cell = approach
         dealt = expected_damage(s, target, melee)
         f["damage_dealt"] = min(dealt / target.total_hp, 1.0)
         f["kill"] = 1.0 if dealt >= target.total_hp else 0.0

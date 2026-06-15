@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from tactica.actions import Action, ActionType, xy_cell
+from tactica.actions import Action, ActionType, is_melee, xy_cell
 from tactica.agents import (
     EpsilonAgent,
     HeuristicAgent,
@@ -104,3 +104,31 @@ def test_heuristic_beats_random_90pct_on_symmetric_map() -> None:
         _, _, score = run_mirrored_pair("heuristic", "random", scenario, seed)
         scores.append(score)
     assert float(np.mean(scores)) >= 0.9
+
+
+def test_heuristic_emits_legal_directional_melee() -> None:
+    sc = Scenario(
+        "probe",
+        army0=(ArmySlot(UnitType.SWORDSMAN, 5, xy_cell(4, 4)),),
+        army1=(ArmySlot(UnitType.PIKEMAN, 5, xy_cell(5, 4)),),
+    )
+    b = Battle.from_scenario(sc, 1)
+    while b.active_stack().unit_type != UnitType.SWORDSMAN:
+        b.step(Action(ActionType.DEFEND))
+    action = HeuristicAgent().act(b)
+    assert is_melee(action.type)
+    assert action.target_cell == xy_cell(5, 4)
+    assert b.legal_action_mask()[action.id]
+
+
+def test_weighted_picks_legal_action_with_directional_melee() -> None:
+    sc = Scenario(
+        "probe",
+        army0=(ArmySlot(UnitType.SWORDSMAN, 5, xy_cell(4, 4)),),
+        army1=(ArmySlot(UnitType.PIKEMAN, 5, xy_cell(5, 4)),),
+    )
+    b = Battle.from_scenario(sc, 1)
+    while b.active_stack().unit_type != UnitType.SWORDSMAN:
+        b.step(Action(ActionType.DEFEND))
+    action = WeightedAgent().act(b)
+    assert b.legal_action_mask()[action.id]
