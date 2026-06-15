@@ -202,6 +202,31 @@ class TestDirectionalMelee:
         assert not any(is_melee(a.type) for a in b.legal_actions())
 
 
+class TestExpectedDamage:
+    def test_matches_deterministic_compute_damage(self) -> None:
+        # The average-roll preview must equal the dealt damage in deterministic
+        # mode (single source of truth) across charge thresholds and ranged.
+        from tactica.battle import expected_damage
+        b = det_battle(unit0=C, count0=2, cell0=(0, 0),
+                       unit1=P, count1=1, cell1=(10, 8))
+        cav, pike = make_stack(0, 0, C, 2), make_stack(1, 1, P, 1)
+        for moved in (0, 1, 2, 5):
+            assert (expected_damage(cav, pike, melee=True, moved=moved)
+                    == b.compute_damage(cav, pike, melee=True, moved=moved))
+        archer = make_stack(2, 0, A, 4)
+        assert (expected_damage(archer, pike, melee=False)
+                == b.compute_damage(archer, pike, melee=False))
+        # ranged unit's melee still takes the MELEE_PENALTY
+        assert (expected_damage(archer, pike, melee=True)
+                == b.compute_damage(archer, pike, melee=True))
+
+    def test_models_charge(self) -> None:
+        from tactica.battle import expected_damage
+        cav, pike = make_stack(0, 0, C, 1), make_stack(1, 1, P, 1)
+        assert (expected_damage(cav, pike, melee=True, moved=2)
+                > expected_damage(cav, pike, melee=True, moved=0))
+
+
 # --------------------------------------------------------------------- #
 # Turn order
 

@@ -12,17 +12,8 @@ from pathlib import Path
 
 from tactica.actions import Action, ActionType, is_melee
 from tactica.agents.base import Agent
-from tactica.battle import (
-    DAMAGE_MOD_MAX,
-    DAMAGE_MOD_MIN,
-    DAMAGE_MOD_PER_POINT,
-    MELEE_PENALTY_FACTOR,
-    Battle,
-    Stack,
-    chebyshev,
-)
+from tactica.battle import Battle, Stack, chebyshev, expected_damage
 from tactica.agents.heuristic import stack_value
-from tactica.units import Perk
 
 FEATURES = (
     "damage_dealt",     # expected damage as a fraction of the target's HP pool
@@ -50,23 +41,6 @@ DEFAULT_WEIGHTS: dict[str, float] = {
     "wait": -0.10,
     "defend": 0.05,
 }
-
-
-def expected_damage(attacker: Stack, defender: Stack, melee: bool) -> float:
-    """Mirror of Battle.compute_damage with the expected roll.
-
-    TODO(ideas): Perk.CHARGE is not modelled -- the damage_dealt feature
-    understates a charging cavalry strike. Needs a distance-aware feature
-    set (see TODO.md) before the weights can learn it.
-    """
-    stats = attacker.stats
-    base = stats.avg_dmg * attacker.count
-    diff = stats.attack - defender.effective_defense()
-    factor = min(max(1.0 + DAMAGE_MOD_PER_POINT * diff, DAMAGE_MOD_MIN),
-                 DAMAGE_MOD_MAX)
-    if melee and Perk.MELEE_PENALTY in stats.perks:
-        factor *= MELEE_PENALTY_FACTOR
-    return max(1.0, base * factor)
 
 
 @dataclass
@@ -109,17 +83,19 @@ def action_features(battle: Battle, action: Action,
     else:
         target = ctx.enemies[action.target_cell]
         melee = is_melee(action.type)
+        moved = 0
         if melee:
             approach = battle.approach_cell(action.target_cell, action.type)
             if approach is not None:
                 after_cell = approach
-        dealt = expected_damage(s, target, melee)
+                moved = ctx.reach.get(approach, 0)  # feeds CHARGE
+        dealt = expected_damage(s, target, melee, moved)
         f["damage_dealt"] = min(dealt / target.total_hp, 1.0)
         f["kill"] = 1.0 if dealt >= target.total_hp else 0.0
         f["target_value"] = stack_value(target) / ctx.max_value
         f["focus_fire"] = 1.0 if target.total_hp == ctx.weakest_hp else 0.0
         if melee and dealt < target.total_hp and target.retaliations_left > 0:
-            received = expected_damage(target, s, melee=True)
+            received = expected_damage(target, s, melee=True)  # retaliation: moved=0
             f["damage_received"] = min(received / s.total_hp, 1.0)
 
     dist = min(chebyshev(after_cell, c) for c in ctx.enemies) / 10.0
@@ -157,8 +133,8 @@ class WeightedAgent(Agent):
         return sum(self.weights[k] * f[k] for k in FEATURES)
 
     def act(self, battle: Battle) -> Action:
-        legal = battle.legal_actions()
         ctx = TurnContext.from_battle(battle)
+        legal = battle.legal_actions(reach=ctx.reach)  # reuse ctx's BFS
         return max(legal, key=lambda a: (self.score(battle, a, ctx), -a.id))
 
     def config(self) -> dict:

@@ -104,6 +104,32 @@ def chebyshev(a: int, b: int) -> int:
     return max(abs(ax - bx), abs(ay - by))
 
 
+def damage_factor(stats: UnitStats, defender: "Stack", melee: bool,
+                  moved: int) -> float:
+    """Multiplicative damage factor: the attack-vs-defense clamp plus melee
+    perks (MELEE_PENALTY, CHARGE). This is the single place every damage path
+    -- the live roll and the average-roll previews -- computes perk effects, so
+    a new damage perk is added here once."""
+    diff = stats.attack - defender.effective_defense()
+    factor = min(max(1.0 + DAMAGE_MOD_PER_POINT * diff, DAMAGE_MOD_MIN),
+                 DAMAGE_MOD_MAX)
+    if melee and Perk.MELEE_PENALTY in stats.perks:
+        factor *= MELEE_PENALTY_FACTOR
+    if melee and Perk.CHARGE in stats.perks and moved >= CHARGE_DISTANCE:
+        factor *= CHARGE_FACTOR
+    return factor
+
+
+def expected_damage(attacker: "Stack", defender: "Stack", melee: bool,
+                    moved: int = 0) -> int:
+    """Average-roll damage preview (no RNG): the value ``compute_damage`` would
+    return in deterministic mode. Shared by the agents and the dashboard so
+    previews match dealt damage, including CHARGE and MELEE_PENALTY."""
+    base = attacker.stats.avg_dmg * attacker.count
+    return max(1, int(base * damage_factor(attacker.stats, defender,
+                                           melee, moved)))
+
+
 class Battle:
     """Mutable battle state. Use :meth:`clone` for search."""
 
@@ -343,17 +369,11 @@ class Battle:
     def compute_damage(self, attacker: Stack, defender: Stack,
                        melee: bool, moved: int = 0) -> int:
         """``moved`` is the cells travelled as part of this strike's action
-        (0 for retaliations, ranged shots, and stand-and-fight melee)."""
-        stats = attacker.stats
-        base = self._damage_roll(stats) * attacker.count
-        diff = stats.attack - defender.effective_defense()
-        factor = min(max(1.0 + DAMAGE_MOD_PER_POINT * diff, DAMAGE_MOD_MIN),
-                     DAMAGE_MOD_MAX)
-        if melee and Perk.MELEE_PENALTY in stats.perks:
-            factor *= MELEE_PENALTY_FACTOR
-        if melee and Perk.CHARGE in stats.perks and moved >= CHARGE_DISTANCE:
-            factor *= CHARGE_FACTOR
-        return max(1, int(base * factor))
+        (0 for retaliations, ranged shots, and stand-and-fight melee). Shares
+        the perk/clamp math with the previews via ``damage_factor``."""
+        base = self._damage_roll(attacker.stats) * attacker.count
+        return max(1, int(base * damage_factor(attacker.stats, defender,
+                                               melee, moved)))
 
     def _apply_damage(self, target: Stack, damage: int) -> None:
         pool = target.total_hp - damage

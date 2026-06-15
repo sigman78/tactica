@@ -136,3 +136,22 @@ def test_weighted_picks_legal_action_with_directional_melee() -> None:
     # aggressive default weights strike the adjacent pikeman, not DEFEND
     assert is_melee(action.type)
     assert action.target_cell == xy_cell(5, 4)
+
+
+def test_weighted_features_value_charge_side_higher() -> None:
+    # Cavalry (CHARGE) at (4,4) vs a 10-stack pikeman at (5,4): the far (6,4)
+    # approach (distance 2 -> charge) must score higher damage_dealt than the
+    # adjacent (4,4) side (distance 0 -> no charge). Pins the charge-gap fix.
+    from tactica.agents.weighted import TurnContext, action_features
+    sc = Scenario(
+        "probe",
+        army0=(ArmySlot(UnitType.CAVALRY, 1, xy_cell(4, 4)),),
+        army1=(ArmySlot(UnitType.PIKEMAN, 10, xy_cell(5, 4)),),
+    )
+    b = Battle.from_scenario(sc, 1)
+    while b.active_stack().unit_type != UnitType.CAVALRY:
+        b.step(Action(ActionType.DEFEND))
+    ctx = TurnContext.from_battle(b)
+    adjacent = action_features(b, Action(ActionType.MELEE_W, xy_cell(5, 4)), ctx)
+    charging = action_features(b, Action(ActionType.MELEE_E, xy_cell(5, 4)), ctx)
+    assert charging["damage_dealt"] > adjacent["damage_dealt"]

@@ -18,39 +18,13 @@ from pathlib import Path
 
 from tactica.actions import Action, ActionType, BOARD_H, BOARD_W, cell_xy, is_melee
 from tactica.agents import Agent, make_agent
-from tactica.battle import (
-    CHARGE_DISTANCE,
-    CHARGE_FACTOR,
-    DAMAGE_MOD_MAX,
-    DAMAGE_MOD_MIN,
-    DAMAGE_MOD_PER_POINT,
-    MELEE_PENALTY_FACTOR,
-    RULES_VERSION,
-    Battle,
-    Stack,
-)
+from tactica.battle import RULES_VERSION, Battle, Stack, expected_damage
 from tactica.eval.runner import GameRecord, derive_seed, write_jsonl
 from tactica.scenario import load_scenario
-from tactica.units import GLYPHS, Perk
+from tactica.units import GLYPHS
 
 MAX_SESSIONS = 50
 SIDE_NAME = ("gold", "blue")
-
-
-def _expected_damage(attacker: Stack, defender: Stack, melee: bool,
-                     moved: int = 0) -> int:
-    """Average-roll damage preview. Mirrors Battle.compute_damage but never
-    touches the battle RNG, so previews don't perturb the game."""
-    stats = attacker.stats
-    base = stats.avg_dmg * attacker.count
-    diff = stats.attack - defender.effective_defense()
-    factor = min(max(1.0 + DAMAGE_MOD_PER_POINT * diff, DAMAGE_MOD_MIN),
-                 DAMAGE_MOD_MAX)
-    if melee and Perk.MELEE_PENALTY in stats.perks:
-        factor *= MELEE_PENALTY_FACTOR
-    if melee and Perk.CHARGE in stats.perks and moved >= CHARGE_DISTANCE:
-        factor *= CHARGE_FACTOR
-    return max(1, int(base * factor))
 
 
 def _stack_label(s: Stack) -> str:
@@ -190,7 +164,7 @@ class GameSession:
                     # found one and target.uid is in `defaults`; .get() is just
                     # defensive (resolves to a non-matching None otherwise).
                     entry["is_default"] = a.id == defaults.get(target.uid)
-                entry["est"] = _expected_damage(actor, target, melee, moved)
+                entry["est"] = expected_damage(actor, target, melee, moved)
                 entry["target_uid"] = target.uid
             out.append(entry)
         return out

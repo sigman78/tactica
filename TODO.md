@@ -3,24 +3,25 @@
 Deferred work items, mostly fallout from the perk system (CHARGE,
 MELEE_PENALTY) and the speed-derived turn order.
 
-## Distance-aware agent features (training)
+## Agent charge-awareness — remaining work
 
-`WeightedAgent`'s `expected_damage` (agents/weighted.py) does not model
-`Perk.CHARGE`, so the `damage_dealt` / `kill` / `damage_received` features
-understate charging cavalry strikes and the weights can't learn to set up
-charges. Fixing it needs:
+Damage previews now model `Perk.CHARGE`: `battle.expected_damage` (shared by
+`WeightedAgent` and the dashboard) takes `moved`, and `action_features` feeds
+it the chosen approach's BFS distance, so the `damage_dealt` / `kill` features
+value charging sides correctly. `HeuristicAgent` charges via `default_melee`.
+What's left:
 
-- thread the melee approach distance (already returned by
-  `Battle._melee_approach`) into `action_features`;
-- possibly a new feature (`charge_available` or raw `cells_moved`) so the
-  linear model can value distance directly;
-- retune/revalidate weights via SPRT afterwards — the current shipped
-  weights predate charge.
-
-The scripted `HeuristicAgent` is equally blind: it picks melee targets by
-stack value only and will happily attack from adjacent instead of backing
-off to charge. MCTS discovers charges through rollouts, so it is the
-benchmark to compare against.
+- **Re-validate the shipped weights via SPRT.** `weights_default.json` was
+  tuned before charge was modelled (and before the float->int change in
+  `expected_damage`), so `WeightedAgent` now scores melee differently. Run
+  `tactica sprt --candidate weights/default.json --baseline <pre-charge copy>`
+  and retune if it regressed.
+- Optionally add an explicit feature (`charge_available` or raw `cells_moved`)
+  so the linear model can value setting up a charge directly, not just via the
+  doubled `damage_dealt`.
+- Flanking / next-turn-exposure features (pick the approach side that minimizes
+  retaliation next round), the original motivation for first-class directional
+  melee in the search agents.
 
 ## Perk-aware value function
 

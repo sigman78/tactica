@@ -25,11 +25,12 @@ use the new unit by name immediately. Specials are declared via the
 `perks` field (e.g. `perks=frozenset({Perk.CHARGE})`).
 
 **New perk** — add a member to `Perk` in `units.py`, then implement it at
-the matching hook in `battle.py` (damage perks live in
-`Battle.compute_damage`). Keep one implementation point per perk, and
-mirror damage-affecting perks in `agents/weighted.py:expected_damage` and
-`web/games.py:_expected_damage`. Perks that change action *legality* need
-a hook in `Battle.legal_actions` instead.
+the matching hook in `battle.py`. Damage perks go in `battle.damage_factor`
+**only** — `Battle.compute_damage` (the live roll), `battle.expected_damage`
+(the agent/UI average-roll preview), and therefore `WeightedAgent` and the
+dashboard all delegate to it, so there is a single implementation point and
+no mirrors to keep in sync. Perks that change action *legality* need a hook
+in `Battle.legal_actions` instead.
 
 **Directional melee** — melee is encoded as one action type per approach
 side (`MELEE_N…MELEE_NW`); `Action(MELEE_<dir>, target_cell)` strikes the
