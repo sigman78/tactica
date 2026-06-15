@@ -31,8 +31,10 @@ class ActionType(IntEnum):
 
 
 # Approach cell offset (dx, dy) relative to the TARGET cell, per melee
-# direction. MELEE_W means the attacker stands west of the target and
-# strikes east. Order matches the 8-neighborhood.
+# direction (approach_cell = target + offset). Grid convention: +y is south
+# (row = cell // BOARD_W increases downward), so MELEE_N's (0, -1) places the
+# attacker north of the target. MELEE_W means the attacker stands west of the
+# target and strikes east. Order matches the 8-neighborhood.
 MELEE_OFFSETS: dict[ActionType, tuple[int, int]] = {
     ActionType.MELEE_N: (0, -1),
     ActionType.MELEE_NE: (1, -1),
