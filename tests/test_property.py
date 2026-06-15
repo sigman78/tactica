@@ -51,7 +51,7 @@ def test_random_playthrough_invariants(scenario_name: str, seed: int) -> None:
 
 
 def test_exhaustive_action_id_sweep() -> None:
-    """Every one of the 495 ids either decodes+steps (masked) or raises
+    """Every one of the 1188 ids either decodes+steps (masked) or raises
     (unmasked or non-canonical), at several distinct game states."""
     b = Battle.from_scenario(BUILTIN_SCENARIOS["archers_vs_cavalry"], 13)
     rng = np.random.Generator(np.random.PCG64(2))

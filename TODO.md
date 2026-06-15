@@ -43,3 +43,15 @@ Turn order is now derived from speed (HoMM3 model). When buffs arrive:
   change affects the *next* round's order, never the current queue;
 - buffs become part of battle state: include them in `clone()`,
   `state_hash()`, and `observe()` (new feature plane).
+
+## Directional melee follow-ups
+
+- **MCTS doesn't search approach sides.** `MCTSAgent._root_arms` collapses the
+  8 melee directions to one charge-aware `default_melee` arm per target, because
+  flat-UCT with short random rollouts has no positional eval to rank sides
+  beyond charge. A nested per-direction scorer (or intra-target progressive
+  widening) is the upgrade, gated on positional eval existing first.
+- **Double `reachable()` per melee step.** `Battle.step` validates (which calls
+  `reachable`) and then calls `reachable` again to compute `moved`. Harmless on
+  the 99-cell board and the MCTS hot path (`playout`) short-circuits adjacent
+  strikes, but could be threaded through if step throughput ever matters.

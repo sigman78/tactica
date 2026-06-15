@@ -20,10 +20,13 @@ class Battle:
     def playout(self, max_steps=200, ...) -> int     # fast biased-random rollout (search helper)
 ```
 
-- **Action encoding**: `action_id = action_type * 99 + target_cell` with
-  types `{MOVE, MELEE_ATTACK, RANGED_ATTACK, WAIT, DEFEND}`. WAIT/DEFEND are
-  canonical at cell 0; non-canonical ids are rejected. The mask aligns with
-  this encoding exactly, so an RL policy head of size 495 plugs straight in.
+- **Action encoding**: `action_id = action_type * 99 + target_cell` with 12
+  types `{MOVE, MELEE_N…MELEE_NW (8 directional melee), RANGED_ATTACK, WAIT,
+  DEFEND}`. A melee action names the target's cell and the type names the
+  approach side; the engine resolves the approach cell (`target + offset[dir]`)
+  and sets the charge distance from it. WAIT/DEFEND are canonical at cell 0;
+  non-canonical ids are rejected. The mask aligns with this encoding exactly,
+  so an RL policy head of size 1188 plugs straight in.
 - **Observation planes** (C=18, H=9, W=11): per-side unit-type one-hots
   (10), normalized stack count (2), normalized top-creature HP (2), active
   unit (1), obstacles (1), constant planes for round number and side to move

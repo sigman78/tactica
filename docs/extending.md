@@ -31,6 +31,14 @@ mirror damage-affecting perks in `agents/weighted.py:expected_damage` and
 `web/games.py:_expected_damage`. Perks that change action *legality* need
 a hook in `Battle.legal_actions` instead.
 
+**Directional melee** — melee is encoded as one action type per approach
+side (`MELEE_N…MELEE_NW`); `Action(MELEE_<dir>, target_cell)` strikes the
+target from `target_cell + offset[dir]`. Agents that just want "attack this
+target" call `Battle.default_melee(attacker, target)` for a charge-aware
+direction. Flat-UCT MCTS collapses the 8 directions to that single default
+arm per target (it has no positional eval to rank sides); the action space
+stays first-class for the human UI and any future learned policy.
+
 **New weights** — copy `weights/default.json`, tune, then validate with
 `tactica sprt --candidate yours.json --baseline weights/default.json`
 (see [evaluation.md](evaluation.md) for why SPRT and not a fixed-n run).
