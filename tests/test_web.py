@@ -267,20 +267,36 @@ def test_cancel_job(client):
     assert info["status"] == "cancelled"
 
 
-def test_legal_payload_exposes_directional_melee(client):
-    # Swordsman next to a pikeman: several approach sides, each its own entry
-    # with a `from` square and an `est`, exactly one marked is_default.
-    res = client.post("/api/games", json={
-        "agent": "random", "scenario": "skirmish", "seed": 4, "human_side": 0})
-    state = res.json()
-    melee = [a for a in state["legal"] if a["type"].startswith("MELEE_")]
-    # skirmish/seed=4 puts the active stack adjacent to an enemy on the opening
-    # turn, so directional melee MUST be offered (else this test is vacuous).
-    assert melee, "expected directional melee actions at the opening"
+def test_legal_payload_exposes_directional_melee():
+    # Deterministic: a swordsman (side 0, speed 5) starts adjacent to a pikeman
+    # (side 1) and acts first, so the human's opening turn MUST offer directional
+    # melee — each reachable side its own entry with from/dir/est, exactly one
+    # marked is_default per target.
+    from tactica.actions import xy_cell
+    from tactica.agents import make_agent
+    from tactica.battle import Battle
+    from tactica.scenario import ArmySlot, Scenario
+    from tactica.units import UnitType
+    from tactica.web.games import GameSession
+
+    sc = Scenario(
+        "probe",
+        army0=(ArmySlot(UnitType.SWORDSMAN, 5, xy_cell(4, 4)),),
+        army1=(ArmySlot(UnitType.PIKEMAN, 5, xy_cell(5, 4)),),
+    )
+    battle = Battle.from_scenario(sc, 1)
+    session = GameSession(
+        id="probe", battle=battle, agent=make_agent("random", seed=1),
+        agent_spec="random", human_side=battle.current_player(),
+        scenario_name=sc.name, seed=1)
+
+    melee = [a for a in session.state()["legal"]
+             if a["type"].startswith("MELEE_")]
+    assert melee, "adjacent enemy must offer directional melee"
     for a in melee:
         assert a["est"] >= 1
         assert "from" in a and "target_uid" in a and "dir" in a
-    per_target = {}
+    per_target: dict[int, list] = {}
     for a in melee:
         per_target.setdefault(a["target_uid"], []).append(a)
     for entries in per_target.values():
