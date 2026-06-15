@@ -64,3 +64,17 @@ def test_scenario_json_round_trip(tmp_path: Path) -> None:
     path = tmp_path / "custom.json"
     sc.to_json(path)
     assert Scenario.from_json(path) == sc
+
+
+def test_records_carry_rules_version() -> None:
+    from tactica.battle import RULES_VERSION
+    from tactica.eval.runner import GameRecord, run_match
+    from tactica.scenario import BUILTIN_SCENARIOS
+
+    rec = run_match("heuristic", "random", BUILTIN_SCENARIOS["skirmish"], seed=1)
+    assert rec.rules_version == RULES_VERSION
+    # round-trips through dict, and old records (no field) default to 1
+    assert GameRecord.from_dict(rec.to_dict()).rules_version == RULES_VERSION
+    legacy = rec.to_dict()
+    del legacy["rules_version"]
+    assert GameRecord.from_dict(legacy).rules_version == 1

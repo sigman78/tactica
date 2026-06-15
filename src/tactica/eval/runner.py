@@ -16,7 +16,7 @@ from pathlib import Path
 
 from tactica.actions import Action
 from tactica.agents import Agent, make_agent
-from tactica.battle import Battle
+from tactica.battle import Battle, RULES_VERSION
 from tactica.scenario import Scenario
 
 MAX_SEED = 2**63
@@ -39,6 +39,7 @@ class GameRecord:
     winner: int | None
     rounds: int
     state_hash: str
+    rules_version: int = 1
 
     def score(self, side: int) -> float:
         """1 / 0.5 / 0 for the given side."""
@@ -61,6 +62,7 @@ class GameRecord:
             winner=d["winner"],
             rounds=int(d["rounds"]),
             state_hash=d["state_hash"],
+            rules_version=int(d.get("rules_version", 1)),
         )
 
 
@@ -89,6 +91,7 @@ def play_game(
         winner=battle.winner(),
         rounds=battle.round,
         state_hash=battle.state_hash(),
+        rules_version=RULES_VERSION,
     )
 
 

@@ -47,6 +47,7 @@ from tactica.scenario import Scenario
 from tactica.units import GLYPHS, STATS, Perk, UnitStats, UnitType
 
 ROUND_LIMIT = 100
+RULES_VERSION = 2  # 1 = pre-perks; 2 = speed order + perks + directional melee
 DEFEND_BONUS = 2
 DAMAGE_MOD_PER_POINT = 0.05
 DAMAGE_MOD_MIN = 0.3
