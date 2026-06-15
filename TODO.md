@@ -11,11 +11,16 @@ it the chosen approach's BFS distance, so the `damage_dealt` / `kill` features
 value charging sides correctly. `HeuristicAgent` charges via `default_melee`.
 What's left:
 
-- **Re-validate the shipped weights via SPRT.** `weights_default.json` was
-  tuned before charge was modelled (and before the float->int change in
-  `expected_damage`), so `WeightedAgent` now scores melee differently. Run
-  `tactica sprt --candidate weights/default.json --baseline <pre-charge copy>`
-  and retune if it regressed.
+- **Re-validate the shipped weights via SPRT.** DONE (ordering check): on the
+  charge-aware code, `tactica sprt --candidate weights/default.json --baseline
+  weights/conservative.json` gives default ~+15.8 elo over conservative
+  (WDL 1567/2/1431 over 3000 games, LLR +2.68 toward the +2.944 H1 bound) --
+  consistent with the documented ~+11.5, so the charge change preserved the
+  weight ordering. NOT yet checked: absolute non-regression vs a *pre-charge
+  build* (the weights file is unchanged; only the code is, so SPRT can't pit
+  old code against new). If desired, snapshot the pre-charge engine, regenerate
+  its default agent, and SPRT new-vs-old; or just confirm absolute strength
+  with `tactica tournament weighted heuristic random`.
 - Optionally add an explicit feature (`charge_available` or raw `cells_moved`)
   so the linear model can value setting up a charge directly, not just via the
   doubled `damage_dealt`.
