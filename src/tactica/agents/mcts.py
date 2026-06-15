@@ -19,7 +19,7 @@ import numpy as np
 from tactica.actions import Action, ActionType, is_melee
 from tactica.agents.base import Agent
 from tactica.battle import Battle
-from tactica.agents.heuristic import stack_value
+from tactica.agents.heuristic import HeuristicAgent, stack_value
 
 ROLLOUT_CAP = 200
 
@@ -39,19 +39,50 @@ def material_eval(battle: Battle) -> tuple[float, float]:
 
 class MCTSAgent(Agent):
     def __init__(self, simulations: int = 32, c_uct: float = 1.4,
-                 seed: int = 0, rollout_cap: int = 40) -> None:
+                 seed: int = 0, rollout_cap: int = 40,
+                 rollout_policy: str = "random",
+                 rollout_epsilon: float = 0.1) -> None:
         self.simulations = simulations
         self.c_uct = c_uct
         self.rollout_cap = rollout_cap
         self.rng = np.random.Generator(np.random.PCG64(seed))
-        self.name = f"mcts({simulations})"
+        # "random": fast attack/chase-biased rollout (Battle.playout).
+        # "heuristic": epsilon-greedy HeuristicAgent rollout -- a competent
+        # opponent model in the rollout, the lever for beating the heuristic
+        # (uninformed rollouts plateau at/below it regardless of sims).
+        self.rollout_policy = rollout_policy
+        self.rollout_epsilon = rollout_epsilon
+        self._rollout_agent = (HeuristicAgent()
+                               if rollout_policy == "heuristic" else None)
+        tag = "-h" if rollout_policy == "heuristic" else ""
+        self.name = f"mcts({simulations}{tag})"
 
     def config(self) -> dict:
         return {"name": self.name, "simulations": self.simulations,
-                "c_uct": self.c_uct, "rollout_cap": self.rollout_cap}
+                "c_uct": self.c_uct, "rollout_cap": self.rollout_cap,
+                "rollout_policy": self.rollout_policy}
+
+    def _heuristic_playout(self, b: Battle) -> int:
+        """Roll out with the HeuristicAgent policy (epsilon-greedy for line
+        diversity) for both sides; returns steps taken. All randomness flows
+        through the battle's own RNG, like Battle.playout."""
+        rng = b.rng
+        steps = 0
+        while steps < self.rollout_cap and not b.is_terminal():
+            if self.rollout_epsilon and rng.random() < self.rollout_epsilon:
+                legal = b.legal_actions()
+                action = legal[int(rng.integers(len(legal)))]
+            else:
+                action = self._rollout_agent.act(b)
+            b.step(action)
+            steps += 1
+        return steps
 
     def _rollout(self, b: Battle, player: int) -> float:
-        steps = b.playout(max_steps=self.rollout_cap)
+        if self._rollout_agent is not None:
+            steps = self._heuristic_playout(b)
+        else:
+            steps = b.playout(max_steps=self.rollout_cap)
         if b.is_terminal():
             value = b.returns()[player]
         else:

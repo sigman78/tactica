@@ -62,3 +62,26 @@ Turn order is now derived from speed (HoMM3 model). When buffs arrive:
   `reachable`) and then calls `reachable` again to compute `moved`. Harmless on
   the 99-cell board and the MCTS hot path (`playout`) short-circuits adjacent
   strikes, but could be threaded through if step throughput ever matters.
+
+## MCTS strength: rollout policy (prototyped)
+
+Measured: flat-UCT with the default biased-random rollout is **at or below the
+heuristic regardless of depth** (vs heuristic: 32 sims 0.30, 512 0.42, 1024
+0.25 -- small samples, trend flat-to-down). Ruled out the two-player
+sign/perspective bug: flat UCT has no minimax backup to negate, the rollout
+value is taken consistently from the root player's side, and `mcts` beats
+`random` 0.83 (a sign-bugged search could not). The ceiling is the rollout +
+leaf evaluator.
+
+Prototyped the fix: `MCTSAgent(rollout_policy="heuristic")` (epsilon-greedy
+HeuristicAgent rollout for both sides) **beats the heuristic 0.71 at just 64
+sims** on open_field+skirmish, where random-rollout mcts:512 managed 0.42.
+Remaining work:
+
+- It is ~10s/game (the heuristic runs every rollout step) -- a strength
+  experiment, not a default. Profile / cap rollout length, or memoize.
+- Tune `rollout_epsilon` and sims; SPRT it. Currently only constructible
+  programmatically -- wire a spec form into `make_agent` to use it from the
+  tournament/SPRT CLI.
+- A positional leaf eval (beyond material) is the complementary lever; pairs
+  with the "MCTS doesn't search approach sides" item above.

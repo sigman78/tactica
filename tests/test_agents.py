@@ -89,6 +89,20 @@ def test_mcts_handles_fewer_sims_than_actions() -> None:
     assert b.legal_action_mask()[action.id]
 
 
+def test_mcts_heuristic_rollout_picks_legal_actions() -> None:
+    # The heuristic-guided rollout policy must still produce legal moves and
+    # advance the game without error.
+    b = Battle.from_scenario(BUILTIN_SCENARIOS["open_field"], 5)
+    agent = MCTSAgent(simulations=8, seed=1, rollout_policy="heuristic")
+    assert agent.config()["rollout_policy"] == "heuristic"
+    for _ in range(6):
+        if b.is_terminal():
+            break
+        action = agent.act(b)
+        assert b.legal_action_mask()[action.id]
+        b.step(action)
+
+
 def test_weighted_rejects_unknown_feature(tmp_path) -> None:
     bad = tmp_path / "bad.json"
     bad.write_text('{"not_a_feature": 1.0}')

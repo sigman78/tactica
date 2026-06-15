@@ -37,12 +37,24 @@ Agent specs accepted by every CLI command and the dashboard: `random`,
     default, and 0.22 vs heuristic instead of 0.35) and runs ~5x slower:
     long random rollouts drown the root action's effect in outcome noise.
   - A known, measured limitation: strength does **not** scale cleanly with
-    simulations (128 sims ~ 0.25 vs 8 sims on open_field). Uninformed
-    rollouts undervalue initiating melee trades (the attacker always eats
-    retaliation; the tempo payoff is beyond the evaluation horizon), so
-    extra search converges on that bias instead of fixing it. Better
-    rollout policies or tree search are the obvious next experiments —
-    this sandbox exists to make those measurable.
+    simulations. Head-to-head vs the heuristic: 32 sims -> 0.30, 512 -> 0.42,
+    1024 -> 0.25 (small samples, but flat-to-down, not up). This is **not** a
+    two-player sign/perspective bug -- flat UCT has no minimax backup to
+    negate, the rollout value is read consistently from the root player's
+    side, and `mcts` beats `random` 0.83 (a sign-bugged search could not).
+    The ceiling is the evaluator: `Battle.playout` models both sides as
+    biased-random, so the search optimizes "best vs random play" (great vs
+    random, weak vs a competent heuristic), and the material-only leaf is
+    position-blind. Extra search sharpens that biased objective instead of
+    fixing it.
+  - *Heuristic-guided rollouts* — `MCTSAgent(rollout_policy="heuristic")`, an
+    epsilon-greedy `HeuristicAgent` rollout for both sides — are the lever,
+    not more sims: at just **64 sims it beats the heuristic 0.71** on the same
+    open_field+skirmish config where random-rollout `mcts:512` managed 0.42.
+    Cost is ~10s/game (the heuristic runs every rollout step), so it is a
+    strength experiment, not the default, and is currently constructor-only
+    (not in the `mcts:...` spec). Next: tune epsilon/sims, SPRT it, and try a
+    positional leaf eval. This sandbox exists to make those measurable.
 
 See [extending.md](extending.md) for adding your own agent, and
 [evaluation.md](evaluation.md) for how to measure it honestly.
