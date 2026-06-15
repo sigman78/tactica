@@ -25,6 +25,7 @@ from tactica.battle import (
     DAMAGE_MOD_MIN,
     DAMAGE_MOD_PER_POINT,
     MELEE_PENALTY_FACTOR,
+    RULES_VERSION,
     Battle,
     Stack,
 )
@@ -256,6 +257,7 @@ class GameSession:
             winner=b.winner(),
             rounds=b.round,
             state_hash=b.state_hash(),
+            rules_version=RULES_VERSION,
         )
 
 
