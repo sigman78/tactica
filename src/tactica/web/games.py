@@ -186,6 +186,9 @@ class GameSession:
                     ax, ay = cell_xy(approach)
                     entry["from"] = {"x": ax, "y": ay}
                     entry["dir"] = a.type.name
+                    # A legal melee implies a reachable side, so default_melee
+                    # found one and target.uid is in `defaults`; .get() is just
+                    # defensive (resolves to a non-matching None otherwise).
                     entry["is_default"] = a.id == defaults.get(target.uid)
                 entry["est"] = _expected_damage(actor, target, melee, moved)
                 entry["target_uid"] = target.uid

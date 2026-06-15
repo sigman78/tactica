@@ -274,12 +274,14 @@ def test_legal_payload_exposes_directional_melee(client):
         "agent": "random", "scenario": "skirmish", "seed": 4, "human_side": 0})
     state = res.json()
     melee = [a for a in state["legal"] if a["type"].startswith("MELEE_")]
-    if melee:  # skirmish opening may be out of melee range; only assert shape
-        for a in melee:
-            assert a["est"] >= 1
-            assert "from" in a and "target_uid" in a and "dir" in a
-        per_target = {}
-        for a in melee:
-            per_target.setdefault(a["target_uid"], []).append(a)
-        for entries in per_target.values():
-            assert sum(1 for a in entries if a.get("is_default")) == 1
+    # skirmish/seed=4 puts the active stack adjacent to an enemy on the opening
+    # turn, so directional melee MUST be offered (else this test is vacuous).
+    assert melee, "expected directional melee actions at the opening"
+    for a in melee:
+        assert a["est"] >= 1
+        assert "from" in a and "target_uid" in a and "dir" in a
+    per_target = {}
+    for a in melee:
+        per_target.setdefault(a["target_uid"], []).append(a)
+    for entries in per_target.values():
+        assert sum(1 for a in entries if a.get("is_default")) == 1
