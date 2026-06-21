@@ -1,0 +1,633 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MCTS Explorer — Connect 4</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0e1626; --bg2:#0b1120; --panel:#151f33; --panel2:#1a2740;
+    --line:#26344f; --line2:#33445f; --txt:#e6edf7; --muted:#8696b3; --muted2:#5d6e8d;
+    /* four-phase signal palette */
+    --sel:#f5c542; --exp:#4dd0a7; --sim:#a78bfa; --bp:#ff7a85;
+    --accent:#5b9dff; --good:#3ddc84; --bad:#ff5d6c;
+    /* connect-4 discs */
+    --red:#ff5566; --yel:#ffd23f; --hole:#0a1020; --frame:#1d2f52;
+    --mono:'JetBrains Mono',ui-monospace,Menlo,monospace;
+    --disp:'Space Grotesk',system-ui,sans-serif;
+    --body:'Inter',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:
+     radial-gradient(1200px 700px at 80% -10%, #18263f 0%, transparent 60%),
+     radial-gradient(900px 600px at -10% 110%, #141d31 0%, transparent 55%),var(--bg);
+     color:var(--txt);font-family:var(--body);font-size:14px;line-height:1.5;}
+  header.top{padding:18px 22px 14px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:16px;flex-wrap:wrap}
+  .top h1{font-family:var(--disp);font-weight:700;font-size:19px;margin:0}
+  .top h1 .mc{color:var(--accent)}
+  .top .sub{color:var(--muted);font-size:12.5px;max-width:64ch}
+  .badge{font-family:var(--mono);font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:3px 10px}
+
+  .wrap{display:grid;gap:14px;padding:14px 18px 28px;grid-template-columns:330px minmax(360px,1fr) 340px;align-items:start}
+  @media (max-width:1180px){.wrap{grid-template-columns:1fr}}
+
+  .panel{background:linear-gradient(180deg,var(--panel),var(--panel2) 140%);border:1px solid var(--line);border-radius:14px;padding:14px}
+  .panel + .panel{margin-top:14px}
+  .panel h2{font-family:var(--disp);font-weight:600;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 0 12px;display:flex;justify-content:space-between;align-items:center}
+  .panel h2 .hint{font-family:var(--mono);font-size:10.5px;color:var(--muted2);letter-spacing:0;text-transform:none}
+
+  /* ---------- connect-4 board ---------- */
+  .c4{width:min(310px,100%);margin:0 auto}
+  .c4head{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:6px}
+  .colstat{height:40px;border:1px solid var(--line);border-radius:7px;background:var(--bg2);position:relative;overflow:hidden;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px}
+  .colstat .heat{position:absolute;left:0;bottom:0;width:100%;background:var(--accent);opacity:.18}
+  .colstat .n{font-family:var(--mono);font-size:10px;color:var(--txt);z-index:2;line-height:1}
+  .colstat .p{font-family:var(--mono);font-size:8.5px;color:var(--muted);z-index:2}
+  .colstat.reco{border-color:var(--accent);box-shadow:0 0 12px -3px var(--accent)}
+  .colstat.reco::after{content:"▾";position:absolute;top:-2px;color:var(--accent);font-size:12px;z-index:3}
+  .colstat.dead{opacity:.35;cursor:default}
+  .c4grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;background:var(--frame);padding:8px;border-radius:12px}
+  .slot{aspect-ratio:1;border-radius:50%;background:var(--hole);box-shadow:inset 0 2px 4px rgba(0,0,0,.5);position:relative;cursor:pointer;transition:transform .05s}
+  .slot.col-hover{outline:2px solid rgba(91,157,255,.4);outline-offset:-2px}
+  .disc{position:absolute;inset:7%;border-radius:50%}
+  .disc.R{background:radial-gradient(circle at 35% 30%,#ff8a96,var(--red));box-shadow:inset 0 -3px 6px rgba(0,0,0,.35)}
+  .disc.Y{background:radial-gradient(circle at 35% 30%,#ffe487,var(--yel));box-shadow:inset 0 -3px 6px rgba(0,0,0,.3)}
+  .disc.ghost{opacity:.28}
+  .slot.winline .disc{box-shadow:0 0 0 3px var(--good),inset 0 -3px 6px rgba(0,0,0,.3)}
+
+  .turnrow{display:flex;align-items:center;justify-content:center;gap:10px;margin:12px 0 4px;font-family:var(--mono);font-size:12px;color:var(--muted)}
+  .pill{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:999px;border:1px solid var(--line);font-family:var(--mono);font-size:11.5px}
+  .dot{width:10px;height:10px;border-radius:50%}
+  .pill.R .dot{background:var(--red)}.pill.Y .dot{background:var(--yel)}
+  .gameover{text-align:center;font-family:var(--mono);font-size:12px;color:var(--sel);margin-top:8px;min-height:16px}
+
+  /* ---------- controls ---------- */
+  .ctl{margin-bottom:13px}.ctl:last-child{margin-bottom:0}
+  .ctl label{display:flex;justify-content:space-between;align-items:baseline;font-size:12px;color:var(--muted);margin-bottom:5px}
+  .ctl label b{font-family:var(--mono);font-weight:500;color:var(--txt);font-size:12px}
+  input[type=range]{width:100%;-webkit-appearance:none;appearance:none;height:4px;border-radius:3px;background:var(--line2);outline:none}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;border-radius:50%;background:var(--accent);cursor:pointer;border:2px solid var(--panel)}
+  input[type=range]::-moz-range-thumb{width:15px;height:15px;border-radius:50%;background:var(--accent);cursor:pointer;border:2px solid var(--panel)}
+  select{width:100%;background:var(--bg2);color:var(--txt);border:1px solid var(--line);border-radius:8px;padding:7px 9px;font-family:var(--mono);font-size:12px}
+  .checkrow{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);cursor:pointer}
+  .checkrow input{accent-color:var(--accent);width:14px;height:14px}
+  .btnrow{display:flex;gap:7px;flex-wrap:wrap}
+  button.b{flex:1 1 auto;background:var(--panel2);color:var(--txt);border:1px solid var(--line2);border-radius:9px;padding:8px 10px;font-family:var(--disp);font-weight:600;font-size:12.5px;cursor:pointer;transition:background .12s,border-color .12s,transform .05s;white-space:nowrap}
+  button.b:hover{background:#22324f;border-color:var(--accent)}
+  button.b:active{transform:translateY(1px)}
+  button.b.primary{background:linear-gradient(180deg,#2b62b8,#23508f);border-color:#3f78c9}
+  button.b.primary:hover{background:linear-gradient(180deg,#3170cc,#27599c)}
+  button.b.ghost{flex:0 0 auto;background:transparent;color:var(--muted)}
+  button.b:disabled{opacity:.4;cursor:not-allowed}
+
+  /* ---------- phase strip ---------- */
+  .phasestrip{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
+  .phase{border:1px solid var(--line);border-radius:10px;padding:9px 8px;text-align:center;position:relative;overflow:hidden;transition:border-color .15s,background .15s}
+  .phase .pn{font-family:var(--mono);font-size:9.5px;color:var(--muted2);letter-spacing:.08em}
+  .phase .pl{font-family:var(--disp);font-weight:600;font-size:12.5px;margin-top:2px;color:var(--muted)}
+  .phase .bar{position:absolute;left:0;bottom:0;height:3px;width:100%;background:transparent}
+  .phase[data-k=sel].on{border-color:var(--sel);background:rgba(245,197,66,.10)}.phase[data-k=sel].on .pl{color:var(--sel)}.phase[data-k=sel].on .bar{background:var(--sel)}
+  .phase[data-k=exp].on{border-color:var(--exp);background:rgba(77,208,167,.10)}.phase[data-k=exp].on .pl{color:var(--exp)}.phase[data-k=exp].on .bar{background:var(--exp)}
+  .phase[data-k=sim].on{border-color:var(--sim);background:rgba(167,139,250,.10)}.phase[data-k=sim].on .pl{color:var(--sim)}.phase[data-k=sim].on .bar{background:var(--sim)}
+  .phase[data-k=bp].on{border-color:var(--bp);background:rgba(255,122,133,.10)}.phase[data-k=bp].on .pl{color:var(--bp)}.phase[data-k=bp].on .bar{background:var(--bp)}
+
+  /* ---------- tree ---------- */
+  .treewrap{position:relative;height:430px;border:1px solid var(--line);border-radius:10px;background:repeating-linear-gradient(0deg,transparent 0 27px,rgba(255,255,255,.012) 27px 28px),var(--bg2);overflow:hidden}
+  .treewrap svg{display:block;width:100%;height:100%}
+  .treewrap .empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--muted2);font-family:var(--mono);font-size:13px;text-align:center;padding:20px}
+  text.lbl{font-family:var(--mono);font-size:9px;fill:var(--muted)}
+  text.mv{font-family:var(--disp);font-weight:700;font-size:11px}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:9px;font-family:var(--mono);font-size:10.5px;color:var(--muted)}
+  .legend span{display:inline-flex;align-items:center;gap:5px}
+  .legend i{width:18px;height:3px;border-radius:2px;display:inline-block}
+
+  /* ---------- dashboard ---------- */
+  .metrics{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px}
+  .metric{background:var(--bg2);border:1px solid var(--line);border-radius:9px;padding:9px 10px}
+  .metric .k{font-family:var(--mono);font-size:9.5px;color:var(--muted2);letter-spacing:.06em;text-transform:uppercase}
+  .metric .v{font-family:var(--mono);font-weight:700;font-size:18px;margin-top:2px}
+  .reco-line{display:flex;align-items:center;gap:10px;background:rgba(91,157,255,.08);border:1px solid rgba(91,157,255,.3);border-radius:9px;padding:9px 11px;margin-bottom:12px}
+  .reco-line .mvbox{width:34px;height:34px;border-radius:7px;background:var(--bg2);border:1px solid var(--accent);display:flex;align-items:center;justify-content:center;font-family:var(--disp);font-weight:700;color:var(--accent);font-size:15px;flex:0 0 auto}
+  .reco-line .txt{font-size:12px;color:var(--muted);line-height:1.35}
+  .reco-line .txt b{color:var(--txt);font-family:var(--mono)}
+  table.stats{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11px}
+  table.stats th{text-align:right;color:var(--muted2);font-weight:500;font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;padding:4px 6px;border-bottom:1px solid var(--line)}
+  table.stats th:first-child{text-align:left}
+  table.stats td{text-align:right;padding:5px 6px;border-bottom:1px solid rgba(38,52,79,.5)}
+  table.stats td:first-child{text-align:left}
+  table.stats tr.lead td{background:rgba(91,157,255,.07)}
+  .vshare{position:relative;height:5px;border-radius:3px;background:var(--line);overflow:hidden;margin-top:3px}
+  .vshare i{position:absolute;left:0;top:0;bottom:0;background:var(--accent);border-radius:3px}
+  .rollout{display:flex;gap:12px;align-items:center}
+  .miniwrap{flex:0 0 auto;background:var(--frame);padding:3px;border-radius:5px}
+  .mini{display:grid;grid-template-columns:repeat(7,1fr);gap:1.5px;width:84px}
+  .mini div{aspect-ratio:1;border-radius:50%;background:var(--hole)}
+  .mini div.R{background:var(--red)}.mini div.Y{background:var(--yel)}
+  .tally{flex:1;font-family:var(--mono);font-size:11px}
+  .tally .row{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+  .tally .row span:first-child{width:54px;color:var(--muted)}
+  .tbar{flex:1;height:7px;border-radius:4px;background:var(--line);overflow:hidden}
+  .tbar i{display:block;height:100%}
+  .tbar.R i{background:var(--red)}.tbar.Y i{background:var(--yel)}.tbar.D i{background:var(--muted)}
+  canvas#conv{width:100%;height:130px;display:block;border:1px solid var(--line);border-radius:9px;background:var(--bg2)}
+  .convleg{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-top:9px}
+  .convleg div{height:15px;border-radius:3px;font-family:var(--mono);font-size:8.5px;display:flex;align-items:center;justify-content:center;color:#0b1120;font-weight:700}
+  .note{font-size:11.5px;color:var(--muted);line-height:1.5}
+  .note code{font-family:var(--mono);color:var(--txt);background:var(--bg2);padding:1px 5px;border-radius:4px;font-size:11px}
+  @media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <h1><span class="mc">MCTS</span> Explorer · Connect 4</h1>
+  <div class="sub">The tree here is far too large to enumerate, so the search has to <em>choose</em> where to look — that's the whole point of MCTS. Tune <code style="font-family:var(--mono)">c</code> and the rollout policy, step through the four phases, or run the budget and watch the column policy emerge.</div>
+  <span class="badge" id="rootsig">UCB1 · negamax backup</span>
+</header>
+
+<div class="wrap">
+  <!-- ===== LEFT: board + controls ===== -->
+  <div>
+    <div class="panel">
+      <h2>Position <span class="hint" id="boardhint">click a column to drop</span></h2>
+      <div class="c4">
+        <div class="c4head" id="c4head"></div>
+        <div class="c4grid" id="board"></div>
+      </div>
+      <div class="turnrow"><span>to move</span><span class="pill" id="turnpill"><span class="dot"></span><b id="turntxt">Red</b></span></div>
+      <div class="gameover" id="gameover"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Search parameters</h2>
+      <div class="ctl"><label>Exploration constant&nbsp;<i style="color:var(--muted2)">c</i> <b id="cval">1.41</b></label><input type="range" id="c" min="0" max="3" step="0.01" value="1.41"></div>
+      <div class="ctl"><label>Rollout policy</label>
+        <select id="policy">
+          <option value="uni">Uniform random</option>
+          <option value="cen">Center-weighted random</option>
+          <option value="heur">Heuristic (win → block → center)</option>
+        </select></div>
+      <div class="ctl"><label>Iterations per “Run” <b id="batchval">1,500</b></label><input type="range" id="batch" min="50" max="8000" step="50" value="1500"></div>
+      <div class="ctl"><label>Tree display depth <b id="depthval">2</b></label><input type="range" id="depth" min="1" max="5" step="1" value="2"></div>
+      <div class="ctl"><label>Hide nodes below visits <b id="minvval">1</b></label><input type="range" id="minv" min="1" max="80" step="1" value="1"></div>
+      <div class="ctl"><label class="checkrow"><input type="checkbox" id="autorun"> Auto-run the budget after each move</label></div>
+    </div>
+
+    <div class="panel">
+      <h2>Run the search</h2>
+      <div class="btnrow" style="margin-bottom:8px">
+        <button class="b" id="step">Step phase</button>
+        <button class="b" id="iter">+1 iteration</button>
+        <button class="b" id="play">▶ Play steps</button>
+      </div>
+      <div class="btnrow" style="margin-bottom:8px">
+        <button class="b primary" id="run">Run budget</button>
+        <button class="b ghost" id="resetsearch">Clear tree</button>
+      </div>
+      <div class="btnrow">
+        <button class="b" id="applybest">Play best move</button>
+        <select id="preset" style="flex:1 1 130px">
+          <option value="empty">New game · empty</option>
+          <option value="win">Setup · winning drop</option>
+          <option value="block">Setup · block the row</option>
+          <option value="vblock">Setup · block the stack</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== CENTER: phases + tree ===== -->
+  <div>
+    <div class="panel">
+      <h2>Search tree <span class="hint">node size ∝ visits&nbsp;N · fill = value for the mover</span></h2>
+      <div class="phasestrip">
+        <div class="phase" data-k="sel"><div class="pn">PHASE 1</div><div class="pl">Selection</div><div class="bar"></div></div>
+        <div class="phase" data-k="exp"><div class="pn">PHASE 2</div><div class="pl">Expansion</div><div class="bar"></div></div>
+        <div class="phase" data-k="sim"><div class="pn">PHASE 3</div><div class="pl">Simulation</div><div class="bar"></div></div>
+        <div class="phase" data-k="bp"><div class="pn">PHASE 4</div><div class="pl">Backprop</div><div class="bar"></div></div>
+      </div>
+      <div class="treewrap">
+        <svg id="tree" viewBox="0 0 800 430" preserveAspectRatio="xMidYMin meet"></svg>
+        <div class="empty" id="treeempty">No tree yet — press <b style="color:var(--accent);margin:0 4px">▶ Play steps</b> or <b style="color:var(--accent);margin:0 4px">Run budget</b> to grow the search.</div>
+      </div>
+      <div class="legend">
+        <span><i style="background:var(--sel)"></i>selection</span>
+        <span><i style="background:var(--exp)"></i>new node</span>
+        <span><i style="background:var(--sim)"></i>rollout</span>
+        <span><i style="background:var(--bp)"></i>backprop</span>
+        <span><i style="background:linear-gradient(90deg,var(--bad),#7f8aa3,var(--good))"></i>loss → win</span>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>What just happened <span class="hint" id="philabel">idle</span></h2>
+      <div class="note" id="phaseexplain">Selection walks from the root, repeatedly choosing the child with the highest UCB1 score <code>Q̄ + c·√(ln N<sub>parent</sub>/N<sub>child</sub>)</code>, until it reaches a node that still has unexpanded moves. Press <b style="color:var(--txt)">Step phase</b> to advance one phase at a time and read the play-by-play here.</div>
+    </div>
+  </div>
+
+  <!-- ===== RIGHT: dashboard ===== -->
+  <div>
+    <div class="panel">
+      <h2>Telemetry</h2>
+      <div class="metrics">
+        <div class="metric"><div class="k">Iterations</div><div class="v" id="m-iter">0</div></div>
+        <div class="metric"><div class="k">Tree nodes</div><div class="v" id="m-nodes">1</div></div>
+        <div class="metric"><div class="k">Max depth</div><div class="v" id="m-depth">0</div></div>
+        <div class="metric"><div class="k">Rollouts</div><div class="v" id="m-roll">0</div></div>
+      </div>
+      <div class="reco-line">
+        <div class="mvbox" id="reco-box">–</div>
+        <div class="txt" id="reco-txt">The recommended drop appears once the search has run. MCTS returns the <b>most-visited</b> column, not the highest mean — visit count is the robust signal.</div>
+      </div>
+      <h2 style="margin-top:4px">Column statistics</h2>
+      <table class="stats" id="stats">
+        <thead><tr><th>col</th><th>N</th><th>W</th><th>Q̄</th><th>UCB1</th><th>visit %</th></tr></thead>
+        <tbody><tr><td colspan="6" style="text-align:center;color:var(--muted2);padding:14px">— run the search —</td></tr></tbody>
+      </table>
+    </div>
+    <div class="panel">
+      <h2>Last rollout <span class="hint">playout to a terminal board</span></h2>
+      <div class="rollout">
+        <div class="miniwrap"><div class="mini" id="mini"></div></div>
+        <div class="tally" id="tally">
+          <div class="row"><span>Red wins</span><div class="tbar R"><i style="width:0"></i></div><span id="t-r" style="width:34px;text-align:right;color:var(--muted)">0</span></div>
+          <div class="row"><span>Yellow wins</span><div class="tbar Y"><i style="width:0"></i></div><span id="t-y" style="width:34px;text-align:right;color:var(--muted)">0</span></div>
+          <div class="row"><span>Draws</span><div class="tbar D"><i style="width:0"></i></div><span id="t-d" style="width:34px;text-align:right;color:var(--muted)">0</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Policy convergence <span class="hint">column visit share vs. iteration</span></h2>
+      <canvas id="conv" width="640" height="260"></canvas>
+      <div class="convleg" id="convleg"></div>
+      <div class="note" style="margin-top:9px">Each band is one column's share of root visits. As the budget grows, the search piles effort onto the strongest drop — that dominant band <em>is</em> the policy forming.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ============================================================
+   Connect 4 engine  (row 0 = top, row 5 = bottom; gravity ↓)
+   players: 'R' (Red, moves first) and 'Y' (Yellow)
+   ============================================================ */
+const ROWS=6, COLS=7, EM='';
+const idx=(r,c)=>r*COLS+c;
+const other=p=>p==='R'?'Y':'R';
+const NAME={R:'Red',Y:'Yellow'};
+
+function legal(b){const m=[];for(let c=0;c<COLS;c++) if(b[idx(0,c)]===EM) m.push(c); return m;}
+function dropRow(b,c){ for(let r=ROWS-1;r>=0;r--) if(b[idx(r,c)]===EM) return r; return -1; }
+const DIRS=[[0,1],[1,0],[1,1],[1,-1]];
+function winAt(b,r,c){            // 4-in-a-row through (r,c)? -> array of cells or null
+  const p=b[idx(r,c)]; if(!p) return null;
+  for(const [dr,dc] of DIRS){
+    let cells=[[r,c]];
+    for(let s=1;s<4;s++){const nr=r+dr*s,nc=c+dc*s; if(nr<0||nr>=ROWS||nc<0||nc>=COLS||b[idx(nr,nc)]!==p) break; cells.push([nr,nc]);}
+    for(let s=1;s<4;s++){const nr=r-dr*s,nc=c-dc*s; if(nr<0||nr>=ROWS||nc<0||nc>=COLS||b[idx(nr,nc)]!==p) break; cells.unshift([nr,nc]);}
+    if(cells.length>=4) return cells.slice(0,4);
+  }
+  return null;
+}
+function winningFour(b){ for(let r=0;r<ROWS;r++)for(let c=0;c<COLS;c++){ if(b[idx(r,c)]){ const w=winAt(b,r,c); if(w) return w; } } return null; }
+function fullWinner(b){ const w=winningFour(b); if(w) return b[idx(w[0][0],w[0][1])]; return legal(b).length?null:'draw'; }
+function shuffle(a){ for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]];} return a; }
+
+/* ---- rollout policies ---- */
+const CW=[1,2,3,4,3,2,1];                              // centre weighting
+function moveUni(b){ const L=legal(b); return L[Math.random()*L.length|0]; }
+function moveCen(b){ const L=legal(b),w=L.map(c=>CW[c]); let s=w.reduce((a,x)=>a+x,0),r=Math.random()*s; for(let i=0;i<L.length;i++){r-=w[i]; if(r<=0) return L[i];} return L[L.length-1]; }
+function winDrop(b,p){ for(const c of legal(b)){ const r=dropRow(b,c); b[idx(r,c)]=p; const w=winAt(b,r,c); b[idx(r,c)]=EM; if(w) return c; } return -1; }
+function moveHeur(b,p){ let c=winDrop(b,p); if(c>=0) return c; c=winDrop(b,other(p)); if(c>=0) return c; return moveCen(b); }
+const POLICIES={uni:moveUni,cen:moveCen,heur:moveHeur};
+const POLNAME={uni:'uniform',cen:'center-weighted',heur:'heuristic'};
+
+function rollout(board,toMove,polFn){
+  const b=board.slice(); let p=toMove;
+  while(true){ const L=legal(b); if(!L.length) return {result:'draw',board:b}; const c=polFn(b,p); const r=dropRow(b,c); b[idx(r,c)]=p; if(winAt(b,r,c)) return {result:p,board:b}; p=other(p); }
+}
+
+/* ============================================================
+   MCTS node + search  (value W from the perspective of the
+   player who moved INTO the node == parent.toMove)
+   ============================================================ */
+let UID=0;
+class Node{
+  constructor(board,toMove,parent,move,row,depth){
+    this.id=++UID; this.board=board; this.toMove=toMove; this.parent=parent;
+    this.move=move; this.row=row; this.depth=depth; this.children=[]; this.N=0; this.W=0;
+    if(move==null){ const w=fullWinner(board); this.terminal=(w!==null); this.result=this.terminal?w:null; }
+    else { const w=winAt(board,row,move); if(w){ this.terminal=true; this.result=other(toMove); }
+           else if(legal(board).length===0){ this.terminal=true; this.result='draw'; }
+           else { this.terminal=false; this.result=null; } }
+    this.untried=this.terminal?[]:shuffle(legal(board));
+    this.x=0; this.y=0;
+  }
+  get mover(){ return this.parent? this.parent.toMove : null; }
+  get fullyExpanded(){ return this.untried.length===0; }
+  get mean(){ return this.N? this.W/this.N : 0; }
+}
+function ucb1(c,p,k){ if(c.N===0) return Infinity; return c.mean + k*Math.sqrt(Math.log(p.N)/c.N); }
+function bestUCB(n,k){ let b=null,bv=-Infinity; for(const c of n.children){ const v=ucb1(c,n,k); if(v>bv){bv=v;b=c;} } return b; }
+function reward(res,per){ if(res==='draw') return 0.5; return res===per?1:0; }
+
+/* ============================================================ */
+const S={
+  root:null, iterations:0, rollouts:0,
+  c:1.41, batch:1500, policy:'uni', depth:2, minv:1, autorun:false,
+  tally:{R:0,Y:0,draw:0}, lastBoard:null, conv:[],
+  step:{phase:'idle',path:[],leaf:null,expanded:null,result:null},
+  playing:false, playTimer:null, hoverCol:-1,
+};
+function freshRoot(board,toMove){
+  UID=0; S.root=new Node(board.slice(),toMove,null,null,null,0);
+  S.iterations=0; S.rollouts=0; S.tally={R:0,Y:0,draw:0}; S.lastBoard=null; S.conv=[];
+  S.step={phase:'idle',path:[],leaf:null,expanded:null,result:null};
+}
+
+function iterate(){
+  const k=S.c, pol=POLICIES[S.policy];
+  let node=S.root; const path=[node];
+  while(!node.terminal && node.fullyExpanded && node.children.length){ node=bestUCB(node,k); path.push(node); }
+  if(!node.terminal && node.untried.length){
+    const c=node.untried.pop(); const nb=node.board.slice(); const r=dropRow(nb,c); nb[idx(r,c)]=node.toMove;
+    const child=new Node(nb,other(node.toMove),node,c,r,node.depth+1); node.children.push(child); node=child; path.push(node);
+  }
+  let result;
+  if(node.terminal){ result=node.result; S.lastBoard=node.board.slice(); }
+  else { const ro=rollout(node.board,node.toMove,pol); result=ro.result; S.lastBoard=ro.board; }
+  S.rollouts++; S.tally[result]++;
+  for(const n of path){ n.N++; if(n.parent) n.W+=reward(result,n.mover); }
+  S.iterations++; recordConv();
+}
+
+function stepPhase(){
+  const k=S.c, pol=POLICIES[S.policy], st=S.step;
+  if(st.phase==='idle'||st.phase==='backprop'){
+    let node=S.root; const path=[node];
+    while(!node.terminal && node.fullyExpanded && node.children.length){ node=bestUCB(node,k); path.push(node); }
+    st.path=path; st.leaf=node; st.expanded=null; st.result=null; st.phase='sel';
+  } else if(st.phase==='sel'){
+    const node=st.leaf;
+    if(!node.terminal && node.untried.length){
+      const c=node.untried.pop(); const nb=node.board.slice(); const r=dropRow(nb,c); nb[idx(r,c)]=node.toMove;
+      const child=new Node(nb,other(node.toMove),node,c,r,node.depth+1); node.children.push(child); st.path.push(child); st.expanded=child; st.leaf=child;
+    }
+    st.phase='exp';
+  } else if(st.phase==='exp'){
+    const node=st.leaf;
+    if(node.terminal){ st.result=node.result; S.lastBoard=node.board.slice(); }
+    else { const ro=rollout(node.board,node.toMove,pol); st.result=ro.result; S.lastBoard=ro.board; }
+    S.rollouts++; S.tally[st.result]++; st.phase='sim';
+  } else if(st.phase==='sim'){
+    for(const n of st.path){ n.N++; if(n.parent) n.W+=reward(st.result,n.mover); }
+    S.iterations++; recordConv(); st.phase='backprop';
+  }
+  render(); explainPhase();
+}
+function recordConv(){ const kids=S.root.children; const total=kids.reduce((a,k)=>a+k.N,0)||1; const shares={}; for(const k of kids) shares[k.move]=k.N/total; S.conv.push({it:S.iterations,shares}); }
+function recommended(){ if(!S.root.children.length) return null; let b=null; for(const c of S.root.children){ if(!b||c.N>b.N) b=c; } return b; }
+
+/* ============================================================
+   Rendering
+   ============================================================ */
+const $=id=>document.getElementById(id);
+const COLC=['#5b9dff','#4dd0a7','#f5c542','#ff7a85','#a78bfa','#ff9f5b','#5bd6d6'];
+function rateColor(m){ const bad=[255,93,108],mid=[127,138,163],good=[61,220,132]; let a,b,t; if(m<0.5){a=bad;b=mid;t=m/0.5;}else{a=mid;b=good;t=(m-0.5)/0.5;} const ch=i=>Math.round(a[i]+(b[i]-a[i])*t); return `rgb(${ch(0)},${ch(1)},${ch(2)})`; }
+
+function buildBoard(){
+  const head=$('c4head'), grid=$('board');
+  const over=fullWinner(S.root.board)!==null;
+  const kids={}; for(const ch of S.root.children) kids[ch.move]=ch;
+  const total=S.root.children.reduce((a,k)=>a+k.N,0)||1;
+  const reco=recommended();
+  const four=winningFour(S.root.board); const winSet=new Set(four?four.map(([r,c])=>idx(r,c)):[]);
+  const legalCols=new Set(legal(S.root.board));
+
+  // header column stats
+  head.innerHTML='';
+  for(let c=0;c<COLS;c++){
+    const d=document.createElement('div'); d.className='colstat'; d.dataset.col=c;
+    if(!legalCols.has(c)||over){ d.classList.add('dead'); }
+    else{
+      const k=kids[c];
+      const heat=document.createElement('div'); heat.className='heat';
+      if(k){ heat.style.height=(8+72*(k.N/total)).toFixed(0)+'%'; }
+      d.appendChild(heat);
+      const n=document.createElement('div'); n.className='n'; n.textContent=k?k.N:'·'; d.appendChild(n);
+      const p=document.createElement('div'); p.className='p'; p.textContent=k?(k.mean*100).toFixed(0)+'%':''; d.appendChild(p);
+      if(reco && reco.move===c) d.classList.add('reco');
+    }
+    head.appendChild(d);
+  }
+  // grid
+  grid.innerHTML='';
+  for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++){
+    const s=document.createElement('div'); s.className='slot'; s.dataset.col=c;
+    const v=S.root.board[idx(r,c)];
+    if(v){ const dsc=document.createElement('div'); dsc.className='disc '+v; s.appendChild(dsc); if(winSet.has(idx(r,c))) s.classList.add('winline'); }
+    else if(!over && S.hoverCol===c && legalCols.has(c) && dropRow(S.root.board,c)===r){
+      const g=document.createElement('div'); g.className='disc ghost '+S.root.toMove; s.appendChild(g);
+    }
+    if(S.hoverCol===c && legalCols.has(c) && !over) s.classList.add('col-hover');
+    grid.appendChild(s);
+  }
+  $('turntxt').textContent=NAME[S.root.toMove];
+  $('turnpill').className='pill '+S.root.toMove;
+  const w=fullWinner(S.root.board);
+  $('gameover').textContent = w==='draw'?'Game over — draw.' : w? `Game over — ${NAME[w]} connects four.` : '';
+  $('boardhint').textContent = over?'game over · reset to continue':'click a column to drop';
+}
+
+/* ---- tree ---- */
+function layout(){
+  const maxDepth=S.depth, minv=S.minv; const pathSet=new Set(S.step.path);
+  const visible=[];
+  (function walk(n){
+    visible.push(n);
+    for(const ch of n.children){
+      const keep = (ch.depth<=maxDepth && ch.N>=minv) || pathSet.has(ch) || ch===S.step.expanded;
+      if(keep) walk(ch);
+    }
+  })(S.root);
+  let leaf=0; const LH=72;
+  (function place(n){
+    const vis=n.children.filter(ch=>visible.includes(ch));
+    if(!vis.length){ n.x=leaf++; } else { for(const ch of vis) place(ch); n.x=(vis[0].x+vis[vis.length-1].x)/2; }
+    n.y=n.depth*LH;
+  })(S.root);
+  return {visible, maxX:Math.max(leaf-1,0)};
+}
+function svgEl(tag,a){ const e=document.createElementNS('http://www.w3.org/2000/svg',tag); for(const k in a) e.setAttribute(k,a[k]); return e; }
+function buildTree(){
+  const svg=$('tree'); svg.innerHTML='';
+  const has=S.root.children.length>0; $('treeempty').style.display=has?'none':'flex'; if(!has) return;
+  const {visible,maxX}=layout();
+  const padX=46, padY=34, colW=54;
+  const W=Math.max(800,maxX*colW+padX*2);
+  const maxY=Math.max(...visible.map(n=>n.y)); const H=maxY+padY*2;
+  svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
+  const X=n=> maxX? padX+n.x*((W-2*padX)/maxX) : W/2;
+  const Y=n=> padY+n.y;
+  const onPath=new Set(S.step.path); const phase=S.step.phase;
+  const showSel=phase==='sel'||phase==='exp'||phase==='sim', showBp=phase==='backprop';
+  const maxN=Math.max(...visible.map(n=>n.N),1);
+  for(const n of visible){
+    if(n.parent && visible.includes(n.parent)){
+      const inP=onPath.has(n)&&onPath.has(n.parent);
+      let stroke=`rgba(120,140,170,${0.16+0.5*(n.N/maxN)})`, sw=1+2.6*Math.sqrt(n.N/maxN);
+      if(showSel&&inP){stroke='var(--sel)';sw=Math.max(sw,2.4);}
+      if(showBp&&inP){stroke='var(--bp)';sw=Math.max(sw,2.4);}
+      svg.appendChild(svgEl('path',{d:`M${X(n.parent)},${Y(n.parent)} C${X(n.parent)},${(Y(n.parent)+Y(n))/2} ${X(n)},${(Y(n.parent)+Y(n))/2} ${X(n)},${Y(n)}`,fill:'none',stroke,'stroke-width':sw,'stroke-linecap':'round'}));
+    }
+  }
+  if(phase==='sim'&&S.step.leaf){ const lf=S.step.leaf; svg.appendChild(svgEl('circle',{cx:X(lf),cy:Y(lf),r:18,fill:'none',stroke:'var(--sim)','stroke-width':2,'stroke-dasharray':'3 4'})); }
+  for(const n of visible){
+    const r = n===S.root?13:Math.max(5,Math.min(24,4+3.2*Math.sqrt(n.N)));
+    const fill = n===S.root?'#2a3a59':rateColor(n.mean);
+    let stroke='rgba(0,0,0,.35)', sw=1.2;
+    if(showSel&&onPath.has(n)){stroke='var(--sel)';sw=2.4;}
+    if(showBp&&onPath.has(n)){stroke='var(--bp)';sw=2.4;}
+    if(n===S.step.expanded){stroke='var(--exp)';sw=3;}
+    svg.appendChild(svgEl('circle',{cx:X(n),cy:Y(n),r,fill,stroke,'stroke-width':sw}));
+    if(n.move!=null && r>=8){ const t=svgEl('text',{x:X(n),y:Y(n)+0.5,'text-anchor':'middle','dominant-baseline':'middle',class:'mv',fill:'#0b1120'}); t.textContent=n.move; svg.appendChild(t); }
+    if(r>=10){ const t=svgEl('text',{x:X(n),y:Y(n)+r+11,'text-anchor':'middle',class:'lbl'}); t.textContent=n.N; svg.appendChild(t); }
+  }
+}
+
+/* ---- dashboard ---- */
+function buildDash(){
+  $('m-iter').textContent=S.iterations.toLocaleString();
+  $('m-roll').textContent=S.rollouts.toLocaleString();
+  let nodes=0,md=0; (function c(n){nodes++; if(n.depth>md)md=n.depth; n.children.forEach(c);})(S.root);
+  $('m-nodes').textContent=nodes.toLocaleString(); $('m-depth').textContent=md;
+  const reco=recommended();
+  if(reco){ const total=S.root.children.reduce((a,k)=>a+k.N,0)||1;
+    $('reco-box').textContent=reco.move;
+    $('reco-txt').innerHTML=`Drop in column <b>${reco.move}</b> · visited <b>${reco.N.toLocaleString()}</b>× (<b>${(reco.N/total*100).toFixed(1)}%</b>) · mean value <b>${(reco.mean*100).toFixed(1)}%</b> for ${NAME[S.root.toMove]}.`;
+  }
+  const tb=$('stats').querySelector('tbody'); tb.innerHTML='';
+  const kids=[...S.root.children].sort((a,b)=>b.N-a.N); const total=kids.reduce((a,k)=>a+k.N,0)||1;
+  if(!kids.length){ tb.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--muted2);padding:14px">— run the search —</td></tr>'; }
+  else for(const k of kids){
+    const tr=document.createElement('tr'); if(reco&&k===reco) tr.className='lead';
+    const u=ucb1(k,S.root,S.c);
+    tr.innerHTML=`<td>col ${k.move}</td><td>${k.N.toLocaleString()}</td><td>${k.W.toFixed(1)}</td>`+
+      `<td style="color:${rateColor(k.mean)}">${k.mean.toFixed(3)}</td><td>${isFinite(u)?u.toFixed(3):'∞'}</td>`+
+      `<td>${(k.N/total*100).toFixed(1)}<div class="vshare"><i style="width:${(k.N/total*100).toFixed(1)}%"></i></div></td>`;
+    tb.appendChild(tr);
+  }
+  // mini rollout board
+  const mini=$('mini'); mini.innerHTML=''; const b=S.lastBoard||S.root.board;
+  for(let i=0;i<ROWS*COLS;i++){ const d=document.createElement('div'); const v=b[i]; if(v) d.className=v; mini.appendChild(d); }
+  const mx=Math.max(S.tally.R,S.tally.Y,S.tally.draw,1);
+  $('t-r').textContent=S.tally.R.toLocaleString(); $('t-y').textContent=S.tally.Y.toLocaleString(); $('t-d').textContent=S.tally.draw.toLocaleString();
+  $('tally').querySelector('.tbar.R i').style.width=(S.tally.R/mx*100)+'%';
+  $('tally').querySelector('.tbar.Y i').style.width=(S.tally.Y/mx*100)+'%';
+  $('tally').querySelector('.tbar.D i').style.width=(S.tally.draw/mx*100)+'%';
+}
+
+/* ---- convergence ---- */
+function buildConv(){
+  const cv=$('conv'), ctx=cv.getContext('2d'); const w=cv.width,h=cv.height; ctx.clearRect(0,0,w,h);
+  ctx.strokeStyle='rgba(255,255,255,.06)'; ctx.lineWidth=1; for(let g=0;g<=4;g++){const y=h*g/4; ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();}
+  const data=S.conv; if(data.length<2) return;
+  const moves=[...S.root.children].map(k=>k.move).sort((a,b)=>a-b);
+  const stepN=Math.max(1,Math.ceil(data.length/w)); const pts=[]; for(let i=0;i<data.length;i+=stepN) pts.push(data[i]); if(pts[pts.length-1]!==data[data.length-1]) pts.push(data[data.length-1]);
+  const n=pts.length; const X=i=>i/(n-1)*w; let base=new Array(n).fill(0);
+  for(const mv of moves){
+    ctx.beginPath();
+    for(let i=0;i<n;i++){const sh=pts[i].shares[mv]||0;const y=h-(base[i]+sh)*h;(i===0?ctx.moveTo:ctx.lineTo).call(ctx,X(i),y);}
+    for(let i=n-1;i>=0;i--){const y=h-base[i]*h;ctx.lineTo(X(i),y);}
+    ctx.closePath(); ctx.fillStyle=COLC[mv]+'cc'; ctx.fill();
+    for(let i=0;i<n;i++) base[i]+=(pts[i].shares[mv]||0);
+  }
+}
+function buildConvLeg(){ const el=$('convleg'); el.innerHTML=''; for(let i=0;i<COLS;i++){const d=document.createElement('div'); d.style.background=COLC[i]; d.textContent=i; el.appendChild(d);} }
+
+/* ---- phases ---- */
+function setPhaseStrip(){ const map={sel:'sel',exp:'exp',sim:'sim',backprop:'bp'}; document.querySelectorAll('.phase').forEach(p=>p.classList.remove('on')); const k=map[S.step.phase]; if(k){const el=document.querySelector(`.phase[data-k=${k}]`); if(el) el.classList.add('on');} }
+function explainPhase(){
+  const st=S.step, lab=$('philabel'), txt=$('phaseexplain');
+  const pathStr=st.path.map(n=>n.move==null?'root':`c${n.move}`).join(' → ');
+  if(st.phase==='sel'){ lab.textContent='1 · selection'; txt.innerHTML=`Walked the tree following the highest <b>UCB1</b> score at each node until reaching one that still has unexpanded columns. Path: <code>${pathStr}</code> (depth ${st.leaf.depth}). A larger <code>c</code> pulls this path toward less-visited columns.`; }
+  else if(st.phase==='exp'){ lab.textContent='2 · expansion'; if(st.expanded) txt.innerHTML=`Added one child for an untried column — <code>col ${st.expanded.move}</code> at depth ${st.expanded.depth}. The tree grows by exactly one node per iteration, which is why a huge game still yields a small, focused tree.`; else txt.innerHTML=`The selected node is <b>terminal</b> (the game is already decided here), so there is nothing to expand — its known outcome is used directly.`; }
+  else if(st.phase==='sim'){ lab.textContent='3 · simulation'; const r=st.result; const col=r==='draw'?'var(--muted)':(r===S.root.toMove?'var(--good)':'var(--bad)'); txt.innerHTML=`Played a <b>${POLNAME[S.policy]}</b> rollout from the new node to the end of the game — outcome: <b style="color:${col}">${r==='draw'?'draw':NAME[r]+' connects four'}</b>. The rollout is cheap and knowledge-light; its only job is a noisy value estimate.`; }
+  else if(st.phase==='backprop'){ lab.textContent='4 · backprop'; txt.innerHTML=`Propagated the result up the path, incrementing each node's visit count <code>N</code> and adding reward to <code>W</code> from the perspective of whoever moved into it — so the same outcome counts as a win for one player and a loss for the other (the negamax backup). Ready for the next selection.`; }
+  else lab.textContent='idle';
+}
+
+function render(){ buildBoard(); buildTree(); buildDash(); buildConv(); setPhaseStrip(); const reco=recommended(); $('applybest').disabled=!reco||fullWinner(S.root.board)!==null; }
+
+/* ============================================================
+   Actions
+   ============================================================ */
+function runBudget(){ stopPlay(); S.step={phase:'idle',path:[],leaf:null,expanded:null,result:null}; const n=S.batch; for(let i=0;i<n;i++) iterate(); explainPhase(); render(); $('philabel').textContent=`ran ${n.toLocaleString()} iterations`; $('phaseexplain').innerHTML=`Completed <b>${n.toLocaleString()}</b> iterations. Watch the column heatmap and convergence chart concentrate on the strongest drop. Try switching the rollout policy or changing <code>c</code> and re-running to feel the trade-offs — note how few of the millions of possible positions the tree actually holds.`; }
+function oneIteration(){ stopPlay(); S.step={phase:'idle',path:[],leaf:null,expanded:null,result:null}; iterate(); explainPhase(); render(); }
+function playSteps(){ if(S.playing){stopPlay();return;} S.playing=true; $('play').textContent='⏸ Pause'; const tick=()=>{ if(!S.playing) return; stepPhase(); S.playTimer=setTimeout(tick,520); }; tick(); }
+function stopPlay(){ S.playing=false; clearTimeout(S.playTimer); $('play').textContent='▶ Play steps'; }
+
+function playMove(col){
+  stopPlay();
+  if(!legal(S.root.board).includes(col) || fullWinner(S.root.board)!==null) return;
+  let reused=S.root.children.find(ch=>ch.move===col);
+  if(reused){ reused.parent=null; reused.move=null; reused.row=null; (function rd(n,d){n.depth=d; n.children.forEach(c=>rd(c,d+1));})(reused,0); S.root=reused; }
+  else { const nb=S.root.board.slice(); const r=dropRow(nb,col); nb[idx(r,col)]=S.root.toMove; S.root=new Node(nb,other(S.root.toMove),null,null,null,0); }
+  S.iterations=0; S.rollouts=0; S.tally={R:0,Y:0,draw:0}; S.conv=[]; S.lastBoard=null; S.hoverCol=-1;
+  S.step={phase:'idle',path:[],leaf:null,expanded:null,result:null}; render();
+  if(S.autorun && fullWinner(S.root.board)===null) runBudget();
+}
+function applyBest(){ const r=recommended(); if(r) playMove(r.move); }
+
+const _=EM;
+const PRESETS={
+  empty:{b:Array(ROWS*COLS).fill(_),t:'R'},
+  win:  {fn:()=>{ const b=Array(ROWS*COLS).fill(_); drop(b,2,'R');drop(b,3,'R');drop(b,4,'R'); drop(b,0,'Y');drop(b,0,'Y');drop(b,6,'Y'); return {b,t:'R'}; }},
+  block:{fn:()=>{ const b=Array(ROWS*COLS).fill(_); drop(b,0,'Y');drop(b,1,'Y');drop(b,2,'Y'); drop(b,5,'R');drop(b,5,'R');drop(b,6,'R'); return {b,t:'R'}; }},
+  vblock:{fn:()=>{ const b=Array(ROWS*COLS).fill(_); drop(b,3,'Y');drop(b,3,'Y');drop(b,3,'Y'); drop(b,0,'R');drop(b,6,'R');drop(b,0,'R'); return {b,t:'R'}; }},
+};
+function drop(b,c,p){ const r=dropRow(b,c); b[idx(r,c)]=p; return b; }
+const PRESET_HINT={
+  empty:'Empty board, Red to move. With enough budget MCTS gravitates to the centre column — the strongest opening.',
+  win:'Red has three in a row (cols 2-3-4). MCTS should find the winning drop at col 1 or col 5.',
+  block:'Yellow threatens to complete cols 0-1-2. Red must block at col 3 — watch uniform rollouts take more budget to see it than the heuristic policy does.',
+  vblock:'Yellow has three stacked in col 3. Red must block by dropping into col 3.',
+};
+function loadPreset(k){ stopPlay(); const p=PRESETS[k]||PRESETS.empty; const cfg=p.fn?p.fn():{b:p.b,t:p.t}; freshRoot(cfg.b,cfg.t); render(); $('philabel').textContent='idle'; $('phaseexplain').textContent=PRESET_HINT[k]||''; }
+
+/* ============================================================
+   Wiring
+   ============================================================ */
+buildConvLeg();
+freshRoot(Array(ROWS*COLS).fill(_),'R');
+
+function bindRange(id,key,fmt,after){ const el=$(id),out=$(id+'val'); const upd=()=>{ S[key]=parseFloat(el.value); if(out) out.textContent=fmt?fmt(S[key]):el.value; if(after) after(); }; el.addEventListener('input',upd); upd(); }
+bindRange('c','c',v=>v.toFixed(2),()=>{ buildTree(); buildDash(); });
+bindRange('batch','batch',v=>v.toLocaleString());
+bindRange('depth','depth',null,()=>render());
+bindRange('minv','minv',null,()=>buildTree());
+$('policy').addEventListener('change',e=>S.policy=e.target.value);
+$('autorun').addEventListener('change',e=>S.autorun=e.target.checked);
+$('step').addEventListener('click',stepPhase);
+$('iter').addEventListener('click',oneIteration);
+$('play').addEventListener('click',playSteps);
+$('run').addEventListener('click',runBudget);
+$('resetsearch').addEventListener('click',()=>{ stopPlay(); const b=S.root.board.slice(),t=S.root.toMove; freshRoot(b,t); render(); $('philabel').textContent='idle'; });
+$('applybest').addEventListener('click',applyBest);
+$('preset').addEventListener('change',e=>loadPreset(e.target.value));
+
+// board interaction (delegated): click to drop, hover to preview column
+function colFromEvent(e){ const t=e.target.closest('[data-col]'); return t?parseInt(t.dataset.col,10):-1; }
+['board','c4head'].forEach(id=>{
+  const el=$(id);
+  el.addEventListener('click',e=>{ const c=colFromEvent(e); if(c>=0) playMove(c); });
+  el.addEventListener('mousemove',e=>{ const c=colFromEvent(e); if(c!==S.hoverCol){ S.hoverCol=c; buildBoard(); } });
+  el.addEventListener('mouseleave',()=>{ if(S.hoverCol!==-1){ S.hoverCol=-1; buildBoard(); } });
+});
+
+render();
+</script>
+</body>
+</html>
