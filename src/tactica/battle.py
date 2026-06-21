@@ -4,19 +4,23 @@ Rules summary (see TASK.md / README for the contract):
 
 - 11x9 square grid, 8-neighborhood (Chebyshev) movement, BFS reachability.
 - HoMM-style stacks: (unit_type, count, top_hp); damage kills whole creatures.
-- Each round all living stacks act once in initiative order; ties are broken
-  by a shuffle seeded at battle start and fixed for the whole battle.
+- Each round all living stacks act once in speed order (HoMM3 model: turn
+  order is derived from speed, recomputed only at round start); ties are
+  broken by a shuffle seeded at battle start and fixed for the whole battle.
 - WAIT defers a stack (once per round) to a wait phase processed after all
-  non-waiters, in *reverse* initiative order. DEFEND grants +2 defense until
+  non-waiters, in *reverse* speed order. DEFEND grants +2 defense until
   the stack's next turn.
 - Melee triggers one retaliation per defender per round; ranged attacks don't.
-- A ranged unit with an adjacent enemy cannot shoot; any melee strike by a
-  ranged unit (attack or retaliation) does half damage.
+- A ranged unit with an adjacent enemy cannot shoot.
+- Unit specials are declared as :class:`tactica.units.Perk` data and applied
+  here: MELEE_PENALTY halves any melee strike (attack or retaliation);
+  CHARGE doubles melee damage when the attacker moved >= 2 cells as part of
+  the attack action (retaliations count as 0 cells moved).
 - Battle ends when a side is wiped out, or in a draw after 100 rounds.
 
 All randomness flows through one ``np.random.Generator`` owned by the battle.
 ``Scenario(deterministic=True)`` replaces damage rolls with expected values,
-leaving zero chance nodes during play (the initiative tie-shuffle happens at
+leaving zero chance nodes during play (the turn-order tie-shuffle happens at
 construction time and is fixed by the seed).
 """
 from __future__ import annotations
@@ -36,14 +40,16 @@ from tactica.actions import (
     cell_xy,
 )
 from tactica.scenario import Scenario
-from tactica.units import GLYPHS, STATS, UnitStats, UnitType
+from tactica.units import GLYPHS, STATS, Perk, UnitStats, UnitType
 
 ROUND_LIMIT = 100
 DEFEND_BONUS = 2
 DAMAGE_MOD_PER_POINT = 0.05
 DAMAGE_MOD_MIN = 0.3
 DAMAGE_MOD_MAX = 3.0
-RANGED_MELEE_PENALTY = 0.5
+MELEE_PENALTY_FACTOR = 0.5  # Perk.MELEE_PENALTY
+CHARGE_DISTANCE = 2         # Perk.CHARGE: min cells moved within the attack
+CHARGE_FACTOR = 2.0
 
 
 @dataclass
@@ -123,7 +129,7 @@ class Battle:
                                       stats.hp, slot.start_cell)
                 b._n_alive[side] += 1
                 uid += 1
-        # Initiative tiebreak: one seeded shuffle, fixed for the whole battle.
+        # Turn-order tiebreak: one seeded shuffle, fixed for the whole battle.
         perm = b.rng.permutation(len(b.stacks))
         b.tiebreak = {u: int(perm[i]) for i, u in enumerate(b.stacks)}
         b._start_round()
@@ -157,10 +163,10 @@ class Battle:
                 if s.alive and (side is None or s.side == side)]
 
     def _order_key(self, uid: int) -> tuple[int, int]:
-        return (-self.stacks[uid].stats.initiative, self.tiebreak[uid])
+        return (-self.stacks[uid].stats.speed, self.tiebreak[uid])
 
     def _wait_order_key(self, uid: int) -> tuple[int, int]:
-        return (self.stacks[uid].stats.initiative, -self.tiebreak[uid])
+        return (self.stacks[uid].stats.speed, -self.tiebreak[uid])
 
     def _start_round(self) -> None:
         if self.round >= ROUND_LIMIT:
@@ -255,17 +261,23 @@ class Battle:
         return out
 
     def _melee_approach(self, attacker: Stack, target: Stack,
-                        reach: dict[int, int] | None = None) -> int | None:
-        """Cell the attacker strikes from, or None if unreachable.
-        Deterministic: stay put if already adjacent, else the reachable
-        adjacent cell with minimal (distance, cell index). ``reach`` is
-        computed lazily when not supplied."""
+                        reach: dict[int, int] | None = None
+                        ) -> tuple[int, int] | None:
+        """(cell, distance) the attacker strikes from, or None if
+        unreachable. Distance is the BFS path length (honest around
+        obstacles), feeding Perk.CHARGE. Deterministic: stay put if already
+        adjacent, else the reachable adjacent cell with minimal
+        (distance, cell index). ``reach`` is computed lazily when not
+        supplied."""
         if chebyshev(attacker.cell, target.cell) == 1:
-            return attacker.cell
+            return attacker.cell, 0
         if reach is None:
             reach = self.reachable(attacker)
         options = [(reach[c], c) for c in adjacent_cells(target.cell) if c in reach and c != attacker.cell]
-        return min(options)[1] if options else None
+        if not options:
+            return None
+        dist, cell = min(options)
+        return cell, dist
 
     def _enemy_adjacent(self, stack: Stack) -> bool:
         adj = set(adjacent_cells(stack.cell))
@@ -308,14 +320,18 @@ class Battle:
         return float(self.rng.integers(stats.dmg_min, stats.dmg_max + 1))
 
     def compute_damage(self, attacker: Stack, defender: Stack,
-                       melee: bool) -> int:
+                       melee: bool, moved: int = 0) -> int:
+        """``moved`` is the cells travelled as part of this strike's action
+        (0 for retaliations, ranged shots, and stand-and-fight melee)."""
         stats = attacker.stats
         base = self._damage_roll(stats) * attacker.count
         diff = stats.attack - defender.effective_defense()
         factor = min(max(1.0 + DAMAGE_MOD_PER_POINT * diff, DAMAGE_MOD_MIN),
                      DAMAGE_MOD_MAX)
-        if melee and stats.is_ranged:
-            factor *= RANGED_MELEE_PENALTY
+        if melee and Perk.MELEE_PENALTY in stats.perks:
+            factor *= MELEE_PENALTY_FACTOR
+        if melee and Perk.CHARGE in stats.perks and moved >= CHARGE_DISTANCE:
+            factor *= CHARGE_FACTOR
         return max(1, int(base * factor))
 
     def _apply_damage(self, target: Stack, damage: int) -> None:
@@ -330,10 +346,12 @@ class Battle:
         target.top_hp = pool - (target.count - 1) * hp
 
     def _melee_strike(self, attacker: Stack, defender: Stack,
-                      retaliation: bool) -> None:
-        self._apply_damage(defender, self.compute_damage(attacker, defender, melee=True))
+                      retaliation: bool, moved: int = 0) -> None:
+        self._apply_damage(defender, self.compute_damage(attacker, defender,
+                                                         melee=True, moved=moved))
         if (not retaliation and defender.alive and defender.retaliations_left > 0):
             defender.retaliations_left -= 1
+            # Retaliations are struck standing still: moved=0, never a charge.
             self._melee_strike(defender, attacker, retaliation=True)
 
     # ------------------------------------------------------------------ #
@@ -362,8 +380,9 @@ class Battle:
             assert target is not None
             approach = self._melee_approach(s, target)
             assert approach is not None
-            s.cell = approach
-            self._melee_strike(s, target, retaliation=False)
+            cell, moved = approach
+            s.cell = cell
+            self._melee_strike(s, target, retaliation=False, moved=moved)
         elif action.type == ActionType.RANGED_ATTACK:
             target = self._stack_at(action.target_cell)
             assert target is not None

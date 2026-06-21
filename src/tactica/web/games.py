@@ -19,22 +19,25 @@ from pathlib import Path
 from tactica.actions import Action, ActionType, BOARD_H, BOARD_W, cell_xy
 from tactica.agents import Agent, make_agent
 from tactica.battle import (
+    CHARGE_DISTANCE,
+    CHARGE_FACTOR,
     DAMAGE_MOD_MAX,
     DAMAGE_MOD_MIN,
     DAMAGE_MOD_PER_POINT,
-    RANGED_MELEE_PENALTY,
+    MELEE_PENALTY_FACTOR,
     Battle,
     Stack,
 )
 from tactica.eval.runner import GameRecord, derive_seed, write_jsonl
 from tactica.scenario import load_scenario
-from tactica.units import GLYPHS
+from tactica.units import GLYPHS, Perk
 
 MAX_SESSIONS = 50
 SIDE_NAME = ("gold", "blue")
 
 
-def _expected_damage(attacker: Stack, defender: Stack, melee: bool) -> int:
+def _expected_damage(attacker: Stack, defender: Stack, melee: bool,
+                     moved: int = 0) -> int:
     """Average-roll damage preview. Mirrors Battle.compute_damage but never
     touches the battle RNG, so previews don't perturb the game."""
     stats = attacker.stats
@@ -42,8 +45,10 @@ def _expected_damage(attacker: Stack, defender: Stack, melee: bool) -> int:
     diff = stats.attack - defender.effective_defense()
     factor = min(max(1.0 + DAMAGE_MOD_PER_POINT * diff, DAMAGE_MOD_MIN),
                  DAMAGE_MOD_MAX)
-    if melee and stats.is_ranged:
-        factor *= RANGED_MELEE_PENALTY
+    if melee and Perk.MELEE_PENALTY in stats.perks:
+        factor *= MELEE_PENALTY_FACTOR
+    if melee and Perk.CHARGE in stats.perks and moved >= CHARGE_DISTANCE:
+        factor *= CHARGE_FACTOR
     return max(1, int(base * factor))
 
 
@@ -165,14 +170,17 @@ class GameSession:
                 target = next(s for s in b.stacks.values()
                               if s.alive and s.cell == a.target_cell)
                 melee = a.type == ActionType.MELEE_ATTACK
-                entry["est"] = _expected_damage(actor, target, melee)
-                entry["target_uid"] = target.uid
+                moved = 0
                 if melee:
                     entry["retaliates"] = target.retaliations_left > 0
                     approach = b._melee_approach(actor, target)
-                    if approach is not None and approach != actor.cell:
-                        ax, ay = cell_xy(approach)
-                        entry["from"] = {"x": ax, "y": ay}
+                    if approach is not None:
+                        cell, moved = approach
+                        if cell != actor.cell:
+                            ax, ay = cell_xy(cell)
+                            entry["from"] = {"x": ax, "y": ay}
+                entry["est"] = _expected_damage(actor, target, melee, moved)
+                entry["target_uid"] = target.uid
             out.append(entry)
         return out
 
@@ -211,7 +219,7 @@ class GameSession:
                  "top_hp": s.top_hp, "max_hp": s.stats.hp,
                  "x": cell_xy(s.cell)[0], "y": cell_xy(s.cell)[1],
                  "defending": s.defending,
-                 "speed": s.stats.speed, "initiative": s.stats.initiative,
+                 "speed": s.stats.speed,
                  "ranged": s.stats.is_ranged,
                  "impaired": s.stats.is_ranged and b._enemy_adjacent(s)}
                 for s in b.stacks.values() if s.alive],

@@ -16,12 +16,13 @@ from tactica.battle import (
     DAMAGE_MOD_MAX,
     DAMAGE_MOD_MIN,
     DAMAGE_MOD_PER_POINT,
-    RANGED_MELEE_PENALTY,
+    MELEE_PENALTY_FACTOR,
     Battle,
     Stack,
     chebyshev,
 )
 from tactica.agents.heuristic import stack_value
+from tactica.units import Perk
 
 FEATURES = (
     "damage_dealt",     # expected damage as a fraction of the target's HP pool
@@ -52,14 +53,19 @@ DEFAULT_WEIGHTS: dict[str, float] = {
 
 
 def expected_damage(attacker: Stack, defender: Stack, melee: bool) -> float:
-    """Mirror of Battle.compute_damage with the expected roll."""
+    """Mirror of Battle.compute_damage with the expected roll.
+
+    TODO(ideas): Perk.CHARGE is not modelled -- the damage_dealt feature
+    understates a charging cavalry strike. Needs a distance-aware feature
+    set (see TODO.md) before the weights can learn it.
+    """
     stats = attacker.stats
     base = stats.avg_dmg * attacker.count
     diff = stats.attack - defender.effective_defense()
     factor = min(max(1.0 + DAMAGE_MOD_PER_POINT * diff, DAMAGE_MOD_MIN),
                  DAMAGE_MOD_MAX)
-    if melee and stats.is_ranged:
-        factor *= RANGED_MELEE_PENALTY
+    if melee and Perk.MELEE_PENALTY in stats.perks:
+        factor *= MELEE_PENALTY_FACTOR
     return max(1.0, base * factor)
 
 
@@ -106,7 +112,7 @@ def action_features(battle: Battle, action: Action,
         if melee:
             approach = battle._melee_approach(s, target, ctx.reach)
             if approach is not None:
-                after_cell = approach
+                after_cell = approach[0]
         dealt = expected_damage(s, target, melee)
         f["damage_dealt"] = min(dealt / target.total_hp, 1.0)
         f["kill"] = 1.0 if dealt >= target.total_hp else 0.0

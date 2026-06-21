@@ -44,7 +44,7 @@ def test_different_seeds_diverge() -> None:
 def test_deterministic_mode_has_no_chance() -> None:
     sc = BUILTIN_SCENARIOS["open_field"].with_deterministic(True)
     # Different seeds, same actions -> same battle outcome (only the
-    # initiative tie-shuffle and rng bookkeeping differ; compare stacks).
+    # turn-order tie-shuffle and rng bookkeeping differ; compare stacks).
     actions = None
     finals = []
     for seed in (1, 99):
